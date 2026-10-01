@@ -4,7 +4,7 @@ const next = require("next");
 const { Server } = require("socket.io");
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = "localhost";
+const hostname = "0.0.0.0"; // Accepte les connexions du réseau Wi-Fi local
 const port = 3000;
 
 const app = next({ dev, hostname, port });

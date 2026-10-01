@@ -1,0 +1,16 @@
+{
+  "name": "ListenParty",
+  "short_name": "ListenParty",
+  "description": "Apple Music Sync SaaS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#ec4899",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
