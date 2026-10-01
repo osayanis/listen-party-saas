@@ -3,68 +3,97 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Music, Users } from "lucide-react";
+import { Headphones, ArrowRight } from "lucide-react";
 
 export default function Home() {
-  const [pin, setPin] = useState("");
+  const [roomId, setRoomId] = useState("");
   const [username, setUsername] = useState("");
   const router = useRouter();
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin && username) {
-      router.push(`/room/${pin}?username=${username}`);
+    if (roomId && username) {
+      router.push(`/room/${roomId}?username=${encodeURIComponent(username)}`);
     }
   };
 
-  const handleCreate = () => {
-    const newPin = Math.floor(100000 + Math.random() * 900000).toString();
-    router.push(`/room/${newPin}?host=true&username=Admin`);
+  const createRoom = () => {
+    const newRoom = Math.floor(100000 + Math.random() * 900000).toString();
+    if (username) {
+      router.push(`/room/${newRoom}?username=${encodeURIComponent(username)}`);
+    } else {
+      alert("Veuillez entrer un pseudo pour créer un salon !");
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex flex-col items-center justify-center p-4 font-sans text-white">
+    <div className="min-h-screen bg-black flex items-center justify-center p-4 text-white relative overflow-hidden">
+      
+      {/* Design Apple Music Style : Formes floutées */}
+      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-pink-600/30 rounded-full blur-[120px] pointer-events-none mix-blend-screen" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-purple-600/30 rounded-full blur-[150px] pointer-events-none mix-blend-screen" />
+
       <motion.div 
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 text-gray-800"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md bg-white/10 backdrop-blur-3xl border border-white/20 p-8 md:p-10 rounded-[3rem] shadow-2xl relative z-10"
       >
-        <div className="text-center mb-8">
-          <div className="bg-pink-500 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Music className="text-white w-10 h-10" />
+        <div className="flex justify-center mb-6">
+          <div className="bg-pink-500 p-4 rounded-full shadow-lg shadow-pink-500/30">
+            <Headphones className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-extrabold text-gray-900">ListenParty</h1>
-          <p className="text-gray-500 font-medium mt-2">Écoutez Apple Music entre amis, en temps réel.</p>
         </div>
 
-        <form onSubmit={handleJoin} className="space-y-4">
-          <input 
-            type="text" 
-            placeholder="Code PIN de la session" 
-            className="w-full text-center text-2xl font-bold p-4 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none transition"
-            value={pin}
-            onChange={(e) => setPin(e.target.value)}
-          />
-          <input 
-            type="text" 
-            placeholder="Ton pseudo" 
-            className="w-full text-center text-lg p-4 border-2 border-gray-200 rounded-xl focus:border-pink-500 focus:outline-none transition"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-          <button 
-            type="submit" 
-            className="w-full bg-gray-900 hover:bg-black text-white font-bold text-xl py-4 rounded-xl transition shadow-xl"
-          >
-            Rejoindre
-          </button>
+        <h1 className="text-3xl md:text-4xl font-black text-center mb-2 tracking-tight">ListenParty</h1>
+        <p className="text-center text-white/60 mb-10 font-medium text-sm md:text-base">
+          Écoutez Apple Music ou Spotify entre amis, en temps réel.
+        </p>
+
+        <form onSubmit={handleJoin} className="flex flex-col gap-5">
+          <div>
+            <label className="text-sm font-bold text-white/80 mb-2 block ml-2">Ton Pseudo</label>
+            <input 
+              type="text" 
+              placeholder="Ex: Yanis" 
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full bg-black/30 border border-white/10 text-white p-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500 transition placeholder:text-white/30 font-medium"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-bold text-white/80 mb-2 block ml-2">Code du salon (PIN)</label>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="123456" 
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+                className="flex-1 bg-black/30 border border-white/10 text-white p-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500 transition placeholder:text-white/30 font-bold tracking-widest uppercase"
+              />
+              <button 
+                type="submit" 
+                className="bg-white text-black px-6 rounded-2xl font-bold hover:bg-pink-500 hover:text-white transition group flex items-center justify-center"
+              >
+                <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition" />
+              </button>
+            </div>
+          </div>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-gray-100">
-          <button onClick={handleCreate} className="w-full bg-pink-100 hover:bg-pink-200 text-pink-700 font-bold py-3 rounded-xl transition flex justify-center items-center gap-2">
-            <Users className="w-5 h-5" /> Créer un nouveau salon
-          </button>
+        <div className="mt-8 flex items-center gap-4">
+          <div className="h-px bg-white/10 flex-1"></div>
+          <span className="text-white/40 text-sm font-medium">OU</span>
+          <div className="h-px bg-white/10 flex-1"></div>
         </div>
+
+        <button 
+          onClick={createRoom}
+          className="w-full mt-8 bg-pink-500 text-white p-4 rounded-2xl font-bold hover:bg-pink-600 transition shadow-lg shadow-pink-500/25 active:scale-[0.98]"
+        >
+          Créer un nouveau salon
+        </button>
       </motion.div>
     </div>
   );

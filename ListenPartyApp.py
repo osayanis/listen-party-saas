@@ -161,6 +161,12 @@ class ListenPartyStatusBarApp(rumps.App):
         tell application "{app_name}"
             if it is running then
                 set pState to player state as string
+                
+                set pPos to 0
+                try
+                    set pPos to player position
+                end try
+                
                 try
                     set tName to name of current track
                     set tArtist to artist of current track
@@ -171,22 +177,23 @@ class ListenPartyStatusBarApp(rumps.App):
                 
                 {queue_script}
                 
-                return pState & "|" & tName & "|" & tArtist & "|" & upcoming
+                return pState & "|" & tName & "|" & tArtist & "|" & upcoming & "|" & pPos
             end if
-            return "stopped|Aucune musique|Aucun|NO_QUEUE"
+            return "stopped|Aucune musique|Aucun|NO_QUEUE|0"
         end tell
         """
         res = self.run_applescript(script)
         if res:
-            parts = res.split('|', 3)
-            if len(parts) >= 3:
+            parts = res.split('|', 4)
+            if len(parts) >= 4:
                 state_data = {
                     "state": parts[0],
                     "track": parts[1],
                     "artist": parts[2],
-                    "queue": []
+                    "queue": [],
+                    "position": float(parts[4]) if len(parts) > 4 and parts[4].replace('.','',1).isdigit() else 0.0
                 }
-                if len(parts) == 4 and parts[3] not in ["NO_QUEUE", ""]:
+                if parts[3] not in ["NO_QUEUE", ""]:
                     items = [x for x in parts[3].split('||') if x]
                     for idx, item in enumerate(items):
                         sub = item.split('::')
@@ -197,7 +204,7 @@ class ListenPartyStatusBarApp(rumps.App):
                                 "artist": sub[1]
                             })
                 return state_data
-        return {"state": "stopped", "track": "Aucune musique", "artist": "Aucun", "queue": []}
+        return {"state": "stopped", "track": "Aucune musique", "artist": "Aucun", "queue": [], "position": 0.0}
 
     def background_worker(self):
         while True:
