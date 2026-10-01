@@ -28,26 +28,42 @@ app.prepare().then(() => {
         rooms[roomId] = {
           users: [],
           trackInfo: { track: "En attente...", artist: "Mac Bridge", state: "paused", queue: [] },
-          skipVotes: new Set()
+          skipVotes: new Set(),
+          isBlindTest: false,
+          blindTestScores: {},
+          history: [],
+          stats: { emojisSent: 0, messagesSent: 0, skips: 0 }
         };
       }
       
       const existingUserIndex = rooms[roomId].users.findIndex(u => u.id === socket.id);
       if (existingUserIndex === -1) {
         rooms[roomId].users.push({ id: socket.id, username });
+        if (!rooms[roomId].blindTestScores[username]) {
+            rooms[roomId].blindTestScores[username] = 0;
+        }
       }
 
       io.to(roomId).emit("room-update", {
         users: rooms[roomId].users,
         trackInfo: rooms[roomId].trackInfo,
-        skipVotes: rooms[roomId].skipVotes.size
+        skipVotes: rooms[roomId].skipVotes.size,
+        isBlindTest: rooms[roomId].isBlindTest,
+        blindTestScores: rooms[roomId].blindTestScores
       });
     });
 
     socket.on("bridge-state", (roomId, state) => {
       if (rooms[roomId]) {
+        // Track History for Wrapped
+        if (state.track !== "Aucune musique" && state.track !== "En attente...") {
+            const lastTrack = rooms[roomId].history[rooms[roomId].history.length - 1];
+            if (!lastTrack || lastTrack.track !== state.track) {
+                rooms[roomId].history.push({ track: state.track, artist: state.artist, timestamp: Date.now() });
+            }
+        }
+
         rooms[roomId].trackInfo = state;
-        // On reset les votes quand la musique change
         rooms[roomId].skipVotes.clear();
         io.to(roomId).emit("bridge-state", state);
         io.to(roomId).emit("skip-votes-update", { votes: 0, required: getRequiredVotes(roomId) });
@@ -55,17 +71,59 @@ app.prepare().then(() => {
     });
 
     socket.on("web-action", (roomId, data) => {
-      io.to(roomId).emit("web-action", data); // Relay to Mac Bridge
+      io.to(roomId).emit("web-action", data);
     });
 
-    // --- NOUVELLES FONCTIONNALITÉS ---
+    // --- CHAT & BLIND TEST ---
+    socket.on("chat-message", (roomId, username, text) => {
+      if (!rooms[roomId]) return;
+      rooms[roomId].stats.messagesSent++;
+      
+      let systemMessage = null;
+
+      // Blind Test Logic
+      if (rooms[roomId].isBlindTest && rooms[roomId].trackInfo) {
+          const currentTrack = rooms[roomId].trackInfo.track.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const currentArtist = rooms[roomId].trackInfo.artist.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const guess = text.toLowerCase().replace(/[^a-z0-9]/g, '');
+          
+          if (guess.length > 3 && (currentTrack.includes(guess) || currentArtist.includes(guess) || guess.includes(currentTrack))) {
+              rooms[roomId].blindTestScores[username] += 10;
+              systemMessage = `🎉 ${username} a trouvé la bonne réponse ! (+10 pts)`;
+              
+              // Skip automatically to the next song after 3 seconds ? Or just let the host skip
+              io.to(roomId).emit("blind-test-winner", { username, track: rooms[roomId].trackInfo.track, artist: rooms[roomId].trackInfo.artist });
+          }
+      }
+
+      io.to(roomId).emit("new-message", { username, text, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
+      
+      if (systemMessage) {
+          io.to(roomId).emit("new-message", { username: "🤖 Arbitre", text: systemMessage, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
+          io.to(roomId).emit("blind-test-scores", rooms[roomId].blindTestScores);
+      }
+    });
+
+    socket.on("toggle-blind-test", (roomId, status) => {
+        if (rooms[roomId]) {
+            rooms[roomId].isBlindTest = status;
+            io.to(roomId).emit("blind-test-update", status);
+        }
+    });
+
+    socket.on("get-wrapped", (roomId, callback) => {
+        if (rooms[roomId] && callback) {
+            callback({
+                history: rooms[roomId].history,
+                stats: rooms[roomId].stats,
+                scores: rooms[roomId].blindTestScores
+            });
+        }
+    });
 
     socket.on("send-reaction", (roomId, emoji) => {
+      if (rooms[roomId]) rooms[roomId].stats.emojisSent++;
       io.to(roomId).emit("new-reaction", { emoji, id: Date.now() + Math.random() });
-    });
-
-    socket.on("chat-message", (roomId, username, text) => {
-      io.to(roomId).emit("new-message", { username, text, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
     });
 
     socket.on("vote-skip", (roomId) => {
@@ -78,6 +136,7 @@ app.prepare().then(() => {
       io.to(roomId).emit("skip-votes-update", { votes, required });
 
       if (votes >= required && required > 0) {
+        rooms[roomId].stats.skips++;
         io.to(roomId).emit("web-action", { state: 'skip' });
         rooms[roomId].skipVotes.clear();
       }
@@ -89,7 +148,9 @@ app.prepare().then(() => {
         rooms[roomId].skipVotes.delete(socket.id);
         io.to(roomId).emit("room-update", {
           users: rooms[roomId].users,
-          trackInfo: rooms[roomId].trackInfo
+          trackInfo: rooms[roomId].trackInfo,
+          isBlindTest: rooms[roomId].isBlindTest,
+          blindTestScores: rooms[roomId].blindTestScores
         });
       }
     });

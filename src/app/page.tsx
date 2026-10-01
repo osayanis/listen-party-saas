@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Headphones, ArrowRight } from "lucide-react";
+import { ArrowRight, Download, Music } from "lucide-react";
+import Image from "next/image";
 
 export default function Home() {
   const [roomId, setRoomId] = useState("");
@@ -39,14 +40,14 @@ export default function Home() {
         className="w-full max-w-md bg-white/10 backdrop-blur-3xl border border-white/20 p-8 md:p-10 rounded-[3rem] shadow-2xl relative z-10"
       >
         <div className="flex justify-center mb-6">
-          <div className="bg-pink-500 p-4 rounded-full shadow-lg shadow-pink-500/30">
-            <Headphones className="w-10 h-10 text-white" />
+          <div className="w-24 h-24 relative rounded-3xl overflow-hidden shadow-2xl shadow-pink-500/20 border border-white/10">
+            <Image src="/logo.jpg" alt="ListenParty Logo" fill className="object-cover" />
           </div>
         </div>
 
         <h1 className="text-3xl md:text-4xl font-black text-center mb-2 tracking-tight">ListenParty</h1>
         <p className="text-center text-white/60 mb-10 font-medium text-sm md:text-base">
-          Écoutez Apple Music ou Spotify entre amis, en temps réel.
+          Écoutez Apple Music ou Spotify entre amis, 100% Gratuit.
         </p>
 
         <form onSubmit={handleJoin} className="flex flex-col gap-5">
@@ -95,6 +96,24 @@ export default function Home() {
           Créer un nouveau salon
         </button>
       </motion.div>
+
+      {/* FOOTER : TÉLÉCHARGER L'APP */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+        className="absolute bottom-8 z-10"
+      >
+        <a 
+          href="https://github.com/osayanis/listen-party-saas" 
+          target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-3 bg-white/10 backdrop-blur-md border border-white/20 px-6 py-3 rounded-full hover:bg-white/20 transition cursor-pointer group"
+        >
+          <Download className="w-5 h-5 text-white group-hover:-translate-y-1 transition" />
+          <span className="text-white font-bold text-sm">Télécharger l'App Mac (Bridge)</span>
+        </a>
+      </motion.div>
+
     </div>
   );
 }
