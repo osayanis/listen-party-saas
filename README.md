@@ -76,5 +76,5 @@ Ajoutez vos musiques dans cette Playlist sur votre Mac, et le site web se mettra
 
 ---
 <div align="center">
-  Fait avec ❤️ par <a href="#">Yanis</a>
+  Fait avec ❤️ par <a href="https://github.com/osayanis">osayanis</a> et <a href="https://github.com/pirrokin">pirrokin</a>
 </div>
