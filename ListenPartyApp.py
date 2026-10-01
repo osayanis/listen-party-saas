@@ -8,7 +8,7 @@ import json
 
 sio = socketio.Client()
 CONFIG_FILE = os.path.expanduser('~/.listenparty_config.json')
-DEFAULT_CLOUD_URL = 'https://listen-party-saas.vercel.app' # Remplacer par la vraie URL une fois hébergé
+DEFAULT_CLOUD_URL = 'https://listen-party-saas.vercel.app'
 
 class ListenPartyStatusBarApp(rumps.App):
     def __init__(self):
@@ -22,10 +22,14 @@ class ListenPartyStatusBarApp(rumps.App):
         
         # UI Elements
         self.status_menu = rumps.MenuItem("🔴 Statut: Déconnecté")
+        self.target_app_menu = rumps.MenuItem(f"🎵 App cible : {self.config.get('target_app', 'Music')}")
+        
         self.menu = [
             self.status_menu,
+            self.target_app_menu,
             rumps.separator,
             "Rejoindre un Salon",
+            "Changer de Lecteur (Apple/Spotify)",
             "⚙️ Paramètres du Serveur",
         ]
         
@@ -42,7 +46,7 @@ class ListenPartyStatusBarApp(rumps.App):
             with open(CONFIG_FILE, 'r') as f:
                 self.config = json.load(f)
         except Exception:
-            self.config = {'server_url': DEFAULT_CLOUD_URL}
+            self.config = {'server_url': DEFAULT_CLOUD_URL, 'target_app': 'Music'}
 
     def save_config(self):
         try:
@@ -62,10 +66,26 @@ class ListenPartyStatusBarApp(rumps.App):
     def on_web_action(self, data):
         self.ignore_next = True
         state = data.get('state')
+        app_name = self.config.get('target_app', 'Music')
+        
         if state == 'playing':
-            self.run_applescript('tell application "Music" to play')
+            self.run_applescript(f'tell application "{app_name}" to play')
         elif state == 'paused':
-            self.run_applescript('tell application "Music" to pause')
+            self.run_applescript(f'tell application "{app_name}" to pause')
+        elif state == 'skip':
+            self.run_applescript(f'tell application "{app_name}" to next track')
+        elif state == 'volume':
+            vol = data.get('value', 50)
+            self.run_applescript(f'tell application "{app_name}" to set sound volume to {vol}')
+
+    @rumps.clicked("Changer de Lecteur (Apple/Spotify)")
+    def change_player(self, _):
+        current = self.config.get('target_app', 'Music')
+        new_app = "Spotify" if current == "Music" else "Music"
+        self.config['target_app'] = new_app
+        self.save_config()
+        self.target_app_menu.title = f"🎵 App cible : {new_app}"
+        rumps.notification("ListenParty", "Lecteur modifié", f"Le Bridge contrôle désormais {new_app} !")
 
     @rumps.clicked("⚙️ Paramètres du Serveur")
     def settings_dialog(self, _):
@@ -87,7 +107,6 @@ class ListenPartyStatusBarApp(rumps.App):
             # Forcer la reconnexion
             if sio.connected:
                 sio.disconnect()
-            
             rumps.notification("ListenParty", "Paramètres sauvegardés", f"Nouveau serveur : {new_url}")
 
     @rumps.clicked("Rejoindre un Salon")
@@ -117,18 +136,10 @@ class ListenPartyStatusBarApp(rumps.App):
             return None
 
     def get_music_state(self):
-        script = """
-        tell application "Music"
-            if it is running then
-                set pState to player state as string
-                try
-                    set tName to name of current track
-                    set tArtist to artist of current track
-                on error
-                    set tName to "Unknown"
-                    set tArtist to "Unknown"
-                end try
-                
+        app_name = self.config.get('target_app', 'Music')
+        
+        # Le script pour Spotify n'a pas accès à 'current playlist', on omet donc la file d'attente
+        queue_script = """
                 set upcoming to ""
                 try
                     set curPl to current playlist
@@ -144,6 +155,21 @@ class ListenPartyStatusBarApp(rumps.App):
                 on error
                     set upcoming to "NO_QUEUE"
                 end try
+        """ if app_name == "Music" else 'set upcoming to "NO_QUEUE"'
+
+        script = f"""
+        tell application "{app_name}"
+            if it is running then
+                set pState to player state as string
+                try
+                    set tName to name of current track
+                    set tArtist to artist of current track
+                on error
+                    set tName to "Unknown"
+                    set tArtist to "Unknown"
+                end try
+                
+                {queue_script}
                 
                 return pState & "|" & tName & "|" & tArtist & "|" & upcoming
             end if
@@ -175,12 +201,11 @@ class ListenPartyStatusBarApp(rumps.App):
 
     def background_worker(self):
         while True:
-            # Gestion de la connexion dynamique
             if not sio.connected:
                 try:
                     sio.connect(self.config.get('server_url', DEFAULT_CLOUD_URL))
                 except Exception:
-                    pass # Silencieux en cas d'échec de connexion
+                    pass 
             
             time.sleep(1.5)
             if not self.room_id or not sio.connected:

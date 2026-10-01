@@ -4,76 +4,104 @@ const next = require("next");
 const { Server } = require("socket.io");
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = "0.0.0.0"; // Accepte les connexions du réseau Wi-Fi local
+const hostname = "0.0.0.0"; 
 const port = 3000;
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
-app.prepare().then(() => {
-  const httpServer = createServer(handle);
-  const io = new Server(httpServer);
+const rooms = {}; 
 
-  const rooms = {};
+app.prepare().then(() => {
+  const server = createServer((req, res) => {
+    const parsedUrl = parse(req.url, true);
+    handle(req, res, parsedUrl);
+  });
+
+  const io = new Server(server);
 
   io.on("connection", (socket) => {
-    console.log("Utilisateur connecté:", socket.id);
-
+    
     socket.on("join-room", (roomId, username) => {
       socket.join(roomId);
       if (!rooms[roomId]) {
-        rooms[roomId] = { 
-          users: [], 
-          trackInfo: { track: "En attente...", artist: "Mac Bridge", state: "paused" },
-          queue: [] // NOUVEAU : File d'attente globale
+        rooms[roomId] = {
+          users: [],
+          trackInfo: { track: "En attente...", artist: "Mac Bridge", state: "paused", queue: [] },
+          skipVotes: new Set()
         };
       }
-      rooms[roomId].users.push({ id: socket.id, username });
       
-      io.to(roomId).emit("room-update", rooms[roomId]);
-    });
-
-    // Gestion de la file d'attente collaborative
-    socket.on("add-to-queue", (roomId, trackItem) => {
-      if (rooms[roomId]) {
-        rooms[roomId].queue.push(trackItem);
-        io.to(roomId).emit("queue-update", rooms[roomId].queue);
+      const existingUserIndex = rooms[roomId].users.findIndex(u => u.id === socket.id);
+      if (existingUserIndex === -1) {
+        rooms[roomId].users.push({ id: socket.id, username });
       }
-    });
 
-    // Suppression d'une musique de la file
-    socket.on("remove-from-queue", (roomId, trackId) => {
-      if (rooms[roomId]) {
-        rooms[roomId].queue = rooms[roomId].queue.filter(t => t.id !== trackId);
-        io.to(roomId).emit("queue-update", rooms[roomId].queue);
-      }
-    });
-
-    socket.on("web-action", (roomId, action) => {
-      socket.to(roomId).emit("web-action", action);
+      io.to(roomId).emit("room-update", {
+        users: rooms[roomId].users,
+        trackInfo: rooms[roomId].trackInfo,
+        skipVotes: rooms[roomId].skipVotes.size
+      });
     });
 
     socket.on("bridge-state", (roomId, state) => {
       if (rooms[roomId]) {
         rooms[roomId].trackInfo = state;
+        // On reset les votes quand la musique change
+        rooms[roomId].skipVotes.clear();
         io.to(roomId).emit("bridge-state", state);
+        io.to(roomId).emit("skip-votes-update", { votes: 0, required: getRequiredVotes(roomId) });
+      }
+    });
+
+    socket.on("web-action", (roomId, data) => {
+      io.to(roomId).emit("web-action", data); // Relay to Mac Bridge
+    });
+
+    // --- NOUVELLES FONCTIONNALITÉS ---
+
+    socket.on("send-reaction", (roomId, emoji) => {
+      io.to(roomId).emit("new-reaction", { emoji, id: Date.now() + Math.random() });
+    });
+
+    socket.on("chat-message", (roomId, username, text) => {
+      io.to(roomId).emit("new-message", { username, text, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
+    });
+
+    socket.on("vote-skip", (roomId) => {
+      if (!rooms[roomId]) return;
+      rooms[roomId].skipVotes.add(socket.id);
+      
+      const required = getRequiredVotes(roomId);
+      const votes = rooms[roomId].skipVotes.size;
+      
+      io.to(roomId).emit("skip-votes-update", { votes, required });
+
+      if (votes >= required && required > 0) {
+        io.to(roomId).emit("web-action", { state: 'skip' });
+        rooms[roomId].skipVotes.clear();
       }
     });
 
     socket.on("disconnect", () => {
       for (const roomId in rooms) {
-        rooms[roomId].users = rooms[roomId].users.filter((u) => u.id !== socket.id);
-        io.to(roomId).emit("room-update", rooms[roomId]);
+        rooms[roomId].users = rooms[roomId].users.filter(u => u.id !== socket.id);
+        rooms[roomId].skipVotes.delete(socket.id);
+        io.to(roomId).emit("room-update", {
+          users: rooms[roomId].users,
+          trackInfo: rooms[roomId].trackInfo
+        });
       }
     });
   });
 
-  httpServer
-    .once("error", (err) => {
-      console.error(err);
-      process.exit(1);
-    })
-    .listen(port, () => {
-      console.log(`> Ready on http://${hostname}:${port}`);
-    });
+  function getRequiredVotes(roomId) {
+    if (!rooms[roomId]) return 1;
+    const humanUsers = rooms[roomId].users.filter(u => !u.username.includes("MacBridge")).length;
+    return Math.max(1, Math.ceil(humanUsers / 2));
+  }
+
+  server.listen(port, () => {
+    console.log(`> Serveur temps réel prêt sur http://${hostname}:${port}`);
+  });
 });
