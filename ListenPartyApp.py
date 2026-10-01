@@ -3,9 +3,12 @@ import socketio
 import subprocess
 import time
 import threading
+import os
+import json
 
 sio = socketio.Client()
-SERVER_URL = 'http://localhost:3000'
+CONFIG_FILE = os.path.expanduser('~/.listenparty_config.json')
+DEFAULT_CLOUD_URL = 'https://listen-party-saas.vercel.app' # Remplacer par la vraie URL une fois hébergé
 
 class ListenPartyStatusBarApp(rumps.App):
     def __init__(self):
@@ -14,12 +17,16 @@ class ListenPartyStatusBarApp(rumps.App):
         self.last_state = None
         self.ignore_next = False
         
+        # Load Config
+        self.load_config()
+        
         # UI Elements
-        self.status_menu = rumps.MenuItem("Statut: Déconnecté")
+        self.status_menu = rumps.MenuItem("🔴 Statut: Déconnecté")
         self.menu = [
             self.status_menu,
             rumps.separator,
             "Rejoindre un Salon",
+            "⚙️ Paramètres du Serveur",
         ]
         
         # Socket.IO Event Binding
@@ -29,6 +36,20 @@ class ListenPartyStatusBarApp(rumps.App):
         
         # Start Worker Thread
         threading.Thread(target=self.background_worker, daemon=True).start()
+
+    def load_config(self):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                self.config = json.load(f)
+        except Exception:
+            self.config = {'server_url': DEFAULT_CLOUD_URL}
+
+    def save_config(self):
+        try:
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump(self.config, f)
+        except Exception as e:
+            print(f"Erreur de sauvegarde config : {e}")
 
     def on_connect(self):
         self.status_menu.title = "🟢 Statut: Connecté au Web"
@@ -45,6 +66,29 @@ class ListenPartyStatusBarApp(rumps.App):
             self.run_applescript('tell application "Music" to play')
         elif state == 'paused':
             self.run_applescript('tell application "Music" to pause')
+
+    @rumps.clicked("⚙️ Paramètres du Serveur")
+    def settings_dialog(self, _):
+        window = rumps.Window(
+            message="Entrez l'URL de votre serveur (ex: http://192.168.1.5:3000)\n\nLaissez vide pour utiliser le Serveur Cloud Officiel.",
+            title="Paramètres Serveur",
+            default_text=self.config.get('server_url', ''),
+            cancel=True
+        )
+        response = window.run()
+        if response.clicked:
+            new_url = response.text.strip()
+            if not new_url:
+                new_url = DEFAULT_CLOUD_URL
+            
+            self.config['server_url'] = new_url
+            self.save_config()
+            
+            # Forcer la reconnexion
+            if sio.connected:
+                sio.disconnect()
+            
+            rumps.notification("ListenParty", "Paramètres sauvegardés", f"Nouveau serveur : {new_url}")
 
     @rumps.clicked("Rejoindre un Salon")
     def join_room_dialog(self, _):
@@ -130,16 +174,16 @@ class ListenPartyStatusBarApp(rumps.App):
         return {"state": "stopped", "track": "Aucune musique", "artist": "Aucun", "queue": []}
 
     def background_worker(self):
-        # Attempt to connect to the Node.js server
-        while not sio.connected:
-            try:
-                sio.connect(SERVER_URL)
-            except Exception:
-                time.sleep(2)
-            
         while True:
+            # Gestion de la connexion dynamique
+            if not sio.connected:
+                try:
+                    sio.connect(self.config.get('server_url', DEFAULT_CLOUD_URL))
+                except Exception:
+                    pass # Silencieux en cas d'échec de connexion
+            
             time.sleep(1.5)
-            if not self.room_id:
+            if not self.room_id or not sio.connected:
                 continue
                 
             current_state = self.get_music_state()
