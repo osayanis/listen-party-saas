@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Download, Music } from "lucide-react";
+import { ArrowRight, Download } from "lucide-react";
 import Image from "next/image";
 
 export default function Home() {
@@ -28,70 +28,70 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4 text-white relative overflow-hidden">
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4 text-white relative overflow-hidden font-sans">
       
-      {/* Design Apple Music Style : Formes floutées */}
-      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-pink-600/30 rounded-full blur-[120px] pointer-events-none mix-blend-screen" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-purple-600/30 rounded-full blur-[150px] pointer-events-none mix-blend-screen" />
+      {/* Design Apple Music Style : Formes floutées discrètes */}
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-pink-500/20 rounded-full blur-[120px] pointer-events-none mix-blend-screen" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-purple-500/20 rounded-full blur-[150px] pointer-events-none mix-blend-screen" />
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white/10 backdrop-blur-3xl border border-white/20 p-8 md:p-10 rounded-[3rem] shadow-2xl relative z-10"
+        className="w-full max-w-md bg-white/[0.03] backdrop-blur-2xl border border-white/10 p-8 md:p-10 rounded-3xl relative z-10"
       >
         <div className="flex justify-center mb-6">
-          <div className="w-24 h-24 relative rounded-3xl overflow-hidden shadow-2xl shadow-pink-500/20 border border-white/10">
+          <div className="w-20 h-20 relative rounded-2xl overflow-hidden shadow-lg shadow-pink-500/10 border border-white/5">
             <Image src="/logo.jpg" alt="ListenParty Logo" fill className="object-cover" />
           </div>
         </div>
 
-        <h1 className="text-3xl md:text-4xl font-black text-center mb-2 tracking-tight">ListenParty</h1>
-        <p className="text-center text-white/60 mb-10 font-medium text-sm md:text-base">
-          Écoutez Apple Music ou Spotify entre amis, 100% Gratuit.
+        <h1 className="text-3xl md:text-4xl font-extrabold text-center mb-2 tracking-tight">ListenParty</h1>
+        <p className="text-center text-white/50 mb-10 font-medium text-sm md:text-base">
+          Écoutez Apple Music ou Spotify entre amis.
         </p>
 
-        <form onSubmit={handleJoin} className="flex flex-col gap-5">
+        <form onSubmit={handleJoin} className="flex flex-col gap-4">
           <div>
-            <label className="text-sm font-bold text-white/80 mb-2 block ml-2">Ton Pseudo</label>
+            <label className="text-xs font-bold text-white/60 mb-2 block uppercase tracking-wider ml-1">Ton Pseudo</label>
             <input 
               type="text" 
               placeholder="Ex: Yanis" 
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-black/30 border border-white/10 text-white p-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500 transition placeholder:text-white/30 font-medium"
+              className="w-full bg-black/40 border border-white/5 text-white p-4 rounded-xl focus:outline-none focus:border-pink-500/50 transition placeholder:text-white/20 font-medium"
               required
             />
           </div>
 
           <div>
-            <label className="text-sm font-bold text-white/80 mb-2 block ml-2">Code du salon (PIN)</label>
+            <label className="text-xs font-bold text-white/60 mb-2 block uppercase tracking-wider ml-1">Code du salon (PIN)</label>
             <div className="flex gap-2">
               <input 
                 type="text" 
                 placeholder="123456" 
                 value={roomId}
                 onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-                className="flex-1 bg-black/30 border border-white/10 text-white p-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500 transition placeholder:text-white/30 font-bold tracking-widest uppercase"
+                className="flex-1 bg-black/40 border border-white/5 text-white p-4 rounded-xl focus:outline-none focus:border-pink-500/50 transition placeholder:text-white/20 font-bold tracking-widest uppercase"
               />
               <button 
                 type="submit" 
-                className="bg-white text-black px-6 rounded-2xl font-bold hover:bg-pink-500 hover:text-white transition group flex items-center justify-center"
+                className="bg-white text-black px-6 rounded-xl font-bold hover:bg-pink-500 hover:text-white transition group flex items-center justify-center"
               >
-                <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition" />
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition" />
               </button>
             </div>
           </div>
         </form>
 
         <div className="mt-8 flex items-center gap-4">
-          <div className="h-px bg-white/10 flex-1"></div>
-          <span className="text-white/40 text-sm font-medium">OU</span>
-          <div className="h-px bg-white/10 flex-1"></div>
+          <div className="h-px bg-white/5 flex-1"></div>
+          <span className="text-white/30 text-xs font-bold uppercase tracking-wider">OU</span>
+          <div className="h-px bg-white/5 flex-1"></div>
         </div>
 
         <button 
           onClick={createRoom}
-          className="w-full mt-8 bg-pink-500 text-white p-4 rounded-2xl font-bold hover:bg-pink-600 transition shadow-lg shadow-pink-500/25 active:scale-[0.98]"
+          className="w-full mt-8 bg-white/[0.05] border border-white/10 text-white p-4 rounded-xl font-bold hover:bg-white/10 transition active:scale-[0.98]"
         >
           Créer un nouveau salon
         </button>
@@ -107,10 +107,10 @@ export default function Home() {
         <a 
           href="https://github.com/osayanis/listen-party-saas" 
           target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-3 bg-white/10 backdrop-blur-md border border-white/20 px-6 py-3 rounded-full hover:bg-white/20 transition cursor-pointer group"
+          className="flex items-center gap-2 bg-white/5 backdrop-blur-md border border-white/10 px-5 py-2.5 rounded-full hover:bg-white/10 transition cursor-pointer group"
         >
-          <Download className="w-5 h-5 text-white group-hover:-translate-y-1 transition" />
-          <span className="text-white font-bold text-sm">Télécharger l'App Mac (Bridge)</span>
+          <Download className="w-4 h-4 text-white/70 group-hover:-translate-y-0.5 transition" />
+          <span className="text-white/90 font-semibold text-sm">App Mac (Bridge)</span>
         </a>
       </motion.div>
 

@@ -78,30 +78,27 @@ app.prepare().then(() => {
     socket.on("chat-message", (roomId, username, text) => {
       if (!rooms[roomId]) return;
       rooms[roomId].stats.messagesSent++;
-      
-      let systemMessage = null;
-
-      // Blind Test Logic
-      if (rooms[roomId].isBlindTest && rooms[roomId].trackInfo) {
-          const currentTrack = rooms[roomId].trackInfo.track.toLowerCase().replace(/[^a-z0-9]/g, '');
-          const currentArtist = rooms[roomId].trackInfo.artist.toLowerCase().replace(/[^a-z0-9]/g, '');
-          const guess = text.toLowerCase().replace(/[^a-z0-9]/g, '');
-          
-          if (guess.length > 3 && (currentTrack.includes(guess) || currentArtist.includes(guess) || guess.includes(currentTrack))) {
-              rooms[roomId].blindTestScores[username] += 10;
-              systemMessage = `🎉 ${username} a trouvé la bonne réponse ! (+10 pts)`;
-              
-              // Skip automatically to the next song after 3 seconds ? Or just let the host skip
-              io.to(roomId).emit("blind-test-winner", { username, track: rooms[roomId].trackInfo.track, artist: rooms[roomId].trackInfo.artist });
-          }
-      }
-
       io.to(roomId).emit("new-message", { username, text, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
-      
-      if (systemMessage) {
-          io.to(roomId).emit("new-message", { username: "🤖 Arbitre", text: systemMessage, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
-          io.to(roomId).emit("blind-test-scores", rooms[roomId].blindTestScores);
-      }
+    });
+
+    socket.on("guess-blind-test", (roomId, username, guessTrack, guessArtist) => {
+        if (!rooms[roomId] || !rooms[roomId].isBlindTest || !rooms[roomId].trackInfo) return;
+        
+        const currentTrack = rooms[roomId].trackInfo.track.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const currentArtist = rooms[roomId].trackInfo.artist.toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        const gTrack = guessTrack.toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        // Validation basique : si le titre deviné correspond au vrai titre
+        if (currentTrack.includes(gTrack) || gTrack.includes(currentTrack)) {
+            rooms[roomId].blindTestScores[username] += 10;
+            const systemMessage = `🎉 ${username} a trouvé la bonne réponse ! (+10 pts)`;
+            io.to(roomId).emit("new-message", { username: "🤖 Arbitre", text: systemMessage, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
+            io.to(roomId).emit("blind-test-scores", rooms[roomId].blindTestScores);
+            io.to(roomId).emit("blind-test-winner", { username, track: rooms[roomId].trackInfo.track, artist: rooms[roomId].trackInfo.artist });
+        } else {
+            socket.emit("blind-test-wrong"); // Notify the guesser that it's wrong
+        }
     });
 
     socket.on("toggle-blind-test", (roomId, status) => {

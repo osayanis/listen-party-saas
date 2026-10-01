@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import io from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Pause, Users, ListMusic, MessageCircle, SkipForward, Volume2, Mic2, X, Maximize2, Trophy, Music, Disc } from "lucide-react";
+import { Play, Pause, Users, ListMusic, MessageCircle, SkipForward, Mic2, X, Maximize2, Search, Trophy, Music, Disc } from "lucide-react";
 import Confetti from 'react-confetti';
 
 let socket: any;
@@ -22,7 +22,7 @@ export default function Room() {
   const [trackInfo, setTrackInfo] = useState({ track: "En attente du Bridge...", artist: "Mac OS", state: "paused", queue: [] as any[], position: 0 });
   const [coverUrl, setCoverUrl] = useState("https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=600&q=80");
   
-  const [activeTab, setActiveTab] = useState<'queue' | 'chat' | 'lyrics'>('queue');
+  const [activeTab, setActiveTab] = useState<'queue' | 'chat' | 'lyrics' | 'search'>('queue');
   const [reactions, setReactions] = useState<{id: number, emoji: string}[]>([]);
   const [chatMessages, setChatMessages] = useState<{username: string, text: string, time: string}[]>([]);
   const [chatInput, setChatInput] = useState("");
@@ -31,14 +31,16 @@ export default function Room() {
   const [syncedLyrics, setSyncedLyrics] = useState<{time: number, text: string}[]>([]);
   const [plainLyrics, setPlainLyrics] = useState("");
   const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0);
-  
   const [skipVotes, setSkipVotes] = useState({ votes: 0, required: 1 });
-  const [volume, setVolume] = useState(50);
   
-  // NOUVEAU : BLIND TEST & WRAPPED
   const [isBlindTest, setIsBlindTest] = useState(false);
   const [blindTestScores, setBlindTestScores] = useState<any>({});
   const [showConfetti, setShowConfetti] = useState(false);
+  
+  // NOUVEAU: iTunes Search pour Blind Test
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+
   const [wrappedData, setWrappedData] = useState<any>(null);
   const [showWrapped, setShowWrapped] = useState(false);
   const [wrappedStep, setWrappedStep] = useState(0);
@@ -99,6 +101,7 @@ export default function Room() {
       setSkipVotes({ votes: roomData.skipVotes, required: Math.max(1, Math.ceil(roomData.users.length / 2)) });
       setIsBlindTest(roomData.isBlindTest);
       setBlindTestScores(roomData.blindTestScores);
+      if (roomData.isBlindTest) setActiveTab("search");
       if (roomData.trackInfo) {
         setTrackInfo(roomData.trackInfo);
         setIsPlaying(roomData.trackInfo.state === "playing");
@@ -111,7 +114,9 @@ export default function Room() {
       setTrackInfo((prev) => {
         if (prev.track !== state.track || prev.artist !== state.artist) {
           fetchArtworkAndLyrics(state.track, state.artist);
-          setShowConfetti(false); // Reset confetti on new song
+          setShowConfetti(false);
+          setSearchQuery("");
+          setSearchResults([]);
         }
         return state;
       });
@@ -129,11 +134,20 @@ export default function Room() {
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     });
 
-    socket.on("blind-test-update", (status: boolean) => setIsBlindTest(status));
+    socket.on("blind-test-update", (status: boolean) => {
+        setIsBlindTest(status);
+        if (status) setActiveTab("search");
+        else setActiveTab("queue");
+    });
+    
     socket.on("blind-test-scores", (scores: any) => setBlindTestScores(scores));
     socket.on("blind-test-winner", (data: any) => {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 5000);
+    });
+    
+    socket.on("blind-test-wrong", () => {
+        alert("Ce n'est pas la bonne musique ! Réessaie !");
     });
 
     socket.on("skip-votes-update", (data: any) => setSkipVotes(data));
@@ -144,9 +158,7 @@ export default function Room() {
   useEffect(() => {
     let interval: any;
     if (isPlaying) {
-      interval = setInterval(() => {
-        setCurrentPlaybackTime(prev => prev + 0.1);
-      }, 100);
+      interval = setInterval(() => setCurrentPlaybackTime(prev => prev + 0.1), 100);
     }
     return () => clearInterval(interval);
   }, [isPlaying]);
@@ -154,11 +166,22 @@ export default function Room() {
   useEffect(() => {
     if (activeTab === 'lyrics' && syncedLyrics.length > 0 && !isBlindTest) {
       const activeLine = document.getElementById("active-lyric");
-      if (activeLine && lyricsContainerRef.current) {
-        activeLine.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
+      if (activeLine && lyricsContainerRef.current) activeLine.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [currentPlaybackTime, activeTab, syncedLyrics, isBlindTest]);
+
+  // iTunes Search Debounce
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+        if (!searchQuery.trim()) return setSearchResults([]);
+        try {
+            const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=song&limit=5`);
+            const data = await res.json();
+            setSearchResults(data.results || []);
+        } catch(e) {}
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const togglePlay = () => {
     const newState = isPlaying ? "paused" : "playing";
@@ -167,22 +190,17 @@ export default function Room() {
   };
 
   const sendReaction = (emoji: string) => socket.emit("send-reaction", roomId, emoji);
+  
   const sendChatMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
     socket.emit("chat-message", roomId, username, chatInput.trim());
     setChatInput("");
   };
-  const voteSkip = () => socket.emit("vote-skip", roomId);
-  const changeVolume = (e: any) => {
-    setVolume(e.target.value);
-    socket.emit("web-action", roomId, { state: 'volume', value: e.target.value });
-  };
   
-  const toggleBlindTest = () => {
-      socket.emit("toggle-blind-test", roomId, !isBlindTest);
-      if (!isBlindTest) setActiveTab("chat"); // Force chat pour répondre
-  };
+  const voteSkip = () => socket.emit("vote-skip", roomId);
+  
+  const toggleBlindTest = () => socket.emit("toggle-blind-test", roomId, !isBlindTest);
 
   const startWrapped = () => {
       socket.emit("get-wrapped", roomId, (data: any) => {
@@ -192,22 +210,27 @@ export default function Room() {
       });
   };
 
+  const submitGuess = (trackName: string, artistName: string) => {
+      socket.emit("guess-blind-test", roomId, username, trackName, artistName);
+      setSearchQuery("");
+      setSearchResults([]);
+  };
+
   let activeLyricIndex = -1;
   for (let i = 0; i < syncedLyrics.length; i++) {
     if (currentPlaybackTime >= syncedLyrics[i].time) activeLyricIndex = i;
   }
 
-  // Trier les scores du blind test
   const sortedScores = Object.entries(blindTestScores).sort((a: any, b: any) => b[1] - a[1]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center p-0 md:p-8 font-sans text-white overflow-hidden relative">
+    <div className="min-h-screen flex flex-col items-center p-4 md:p-8 font-sans text-white overflow-hidden relative">
       
       {showConfetti && <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={500} />}
 
       {/* BACKGROUND DYNAMIQUE */}
       <div 
-        className="fixed inset-0 z-0 scale-125 blur-3xl opacity-50 bg-cover bg-center transition-all duration-[2000ms] ease-in-out"
+        className="fixed inset-0 z-0 scale-125 blur-[100px] opacity-60 bg-cover bg-center transition-all duration-[2000ms] ease-in-out"
         style={{ backgroundImage: isBlindTest ? 'none' : `url(${coverUrl})`, backgroundColor: isBlindTest ? '#4c1d95' : '#111' }}
       />
       <div className="fixed inset-0 z-0 bg-black/40 backdrop-blur-3xl" />
@@ -228,87 +251,115 @@ export default function Room() {
         ))}
       </AnimatePresence>
 
+      {/* MODAL QR CODE SIMPLE */}
+      <AnimatePresence>
+        {qrExpanded && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md cursor-pointer"
+            onClick={() => setQrExpanded(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-white p-10 rounded-3xl shadow-2xl relative cursor-default"
+              onClick={e => e.stopPropagation()}
+            >
+              <button onClick={() => setQrExpanded(false)} className="absolute top-4 right-4 bg-gray-100 p-2 rounded-full text-black hover:bg-gray-200 transition">
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-black text-2xl font-black text-center mb-6 mt-4">Code: <span className="text-pink-600">{roomId}</span></h2>
+              <QRCodeSVG value={joinUrl} size={300} />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* HEADER */}
-      <header className="w-full max-w-6xl hidden md:flex justify-between items-center mb-8 bg-white/10 backdrop-blur-xl p-6 rounded-3xl shadow-2xl border border-white/20 relative z-10">
+      <header className="w-full max-w-6xl hidden md:flex justify-between items-center mb-6 bg-white/10 backdrop-blur-xl p-5 rounded-2xl shadow-xl border border-white/10 relative z-10">
         <div>
-          <h1 className="text-3xl font-black flex items-center gap-3">
-              Code PIN: <span className="text-pink-400">{roomId}</span>
-              {isBlindTest && <span className="bg-purple-500 text-white text-sm px-3 py-1 rounded-full animate-pulse">MODE BLIND TEST ACTIF</span>}
+          <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
+              ListenParty <span className="text-pink-400">#{roomId}</span>
+              {isBlindTest && <span className="bg-purple-500 text-white text-xs px-3 py-1 rounded-full animate-pulse uppercase">Blind Test</span>}
           </h1>
-          <p className="text-white/70 font-medium flex items-center gap-2 mt-1">
+          <p className="text-white/60 font-medium flex items-center gap-2 mt-1 text-sm">
             <Users className="w-4 h-4" /> {users.length} ami(s) connecté(s)
           </p>
         </div>
         
         <div className="flex gap-4 items-center">
-            <button onClick={toggleBlindTest} className={`px-4 py-2 rounded-2xl font-bold transition ${isBlindTest ? 'bg-red-500 hover:bg-red-600' : 'bg-purple-500 hover:bg-purple-600'}`}>
+            <button onClick={toggleBlindTest} className={`px-4 py-2 rounded-xl text-sm font-bold transition ${isBlindTest ? 'bg-red-500 hover:bg-red-600' : 'bg-purple-500 hover:bg-purple-600'}`}>
                 {isBlindTest ? 'Arrêter Blind Test' : 'Jouer au Blind Test'}
             </button>
-            <button onClick={startWrapped} className="px-4 py-2 rounded-2xl font-bold bg-gradient-to-r from-pink-500 to-orange-400 hover:scale-105 transition shadow-lg">
-                Terminer la soirée (Wrapped)
+            <button onClick={startWrapped} className="px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r from-pink-500 to-orange-400 hover:scale-105 transition shadow-lg">
+                Soirée Terminée
             </button>
-            <motion.div layoutId="qr-container" onClick={() => setQrExpanded(true)} className="bg-white p-2 rounded-xl cursor-pointer hover:scale-105 transition">
-                <QRCodeSVG value={joinUrl} size={40} />
-            </motion.div>
+            <button onClick={() => setQrExpanded(true)} className="bg-white p-2 rounded-lg cursor-pointer hover:scale-105 transition">
+                <QRCodeSVG value={joinUrl} size={32} />
+            </button>
         </div>
       </header>
 
-      <div className="w-full max-w-6xl flex flex-col md:flex-row gap-6 h-screen md:h-[75vh] relative z-10">
+      <div className="w-full max-w-6xl flex flex-col md:flex-row gap-6 min-h-[500px] md:h-[70vh] relative z-10">
         
         {/* LECTEUR PRINCIPAL */}
-        <motion.div className="flex-1 bg-white/5 backdrop-blur-2xl md:rounded-[3rem] p-6 md:p-10 shadow-2xl border border-white/10 flex flex-col items-center justify-center h-full">
-          <div className="w-full max-w-md flex flex-col items-center">
+        <motion.div className="flex-1 w-full md:max-w-[60%] bg-white/5 backdrop-blur-2xl rounded-3xl p-6 shadow-2xl border border-white/10 flex flex-col items-center justify-center">
+          <div className="w-full max-w-sm flex flex-col items-center">
             
+            {/* Mobile Actions */}
+            <div className="md:hidden flex w-full justify-between items-center mb-6">
+                <button onClick={() => setQrExpanded(true)} className="bg-white/10 px-4 py-2 rounded-full text-xs font-bold border border-white/20">
+                  PIN: {roomId}
+                </button>
+                <button onClick={toggleBlindTest} className={`px-4 py-2 rounded-full text-xs font-bold ${isBlindTest ? 'bg-red-500' : 'bg-purple-500'}`}>
+                    {isBlindTest ? 'Stop Blind Test' : 'Blind Test'}
+                </button>
+            </div>
+
             <AnimatePresence mode="wait">
               {isBlindTest ? (
                   <motion.div 
                     key="blind"
-                    initial={{ opacity: 0, scale: 0.5, rotateY: 90 }} animate={{ opacity: 1, scale: 1, rotateY: 0 }} exit={{ opacity: 0, scale: 0.5, rotateY: -90 }}
-                    className="w-56 h-56 sm:w-72 sm:h-72 md:w-96 md:h-96 rounded-full shadow-2xl mb-8 flex items-center justify-center bg-gradient-to-br from-purple-600 to-indigo-900 border-8 border-white/20 animate-spin-slow"
+                    initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
+                    className="w-48 h-48 sm:w-64 sm:h-64 rounded-full shadow-2xl mb-8 flex items-center justify-center bg-gradient-to-br from-purple-600 to-indigo-900 border-8 border-white/10 animate-spin-slow"
                   >
-                      <Disc className="w-32 h-32 text-white/50" />
+                      <Disc className="w-20 h-20 text-white/40" />
                   </motion.div>
               ) : (
                 <motion.img 
                   key={coverUrl}
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 1.1 }}
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 1.05 }}
                   transition={{ type: 'spring', stiffness: 200, damping: 20 }}
                   src={coverUrl} alt="Album Cover" 
-                  className="w-56 h-56 sm:w-72 sm:h-72 md:w-96 md:h-96 rounded-3xl shadow-2xl mb-8 object-cover border border-white/10"
+                  className="w-48 h-48 sm:w-64 sm:h-64 md:w-80 md:h-80 rounded-2xl shadow-2xl mb-8 object-cover border border-white/10"
                 />
               )}
             </AnimatePresence>
             
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-2 text-center truncate w-full drop-shadow-md">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-black mb-1 text-center truncate w-full drop-shadow-md">
                 {isBlindTest ? 'À vous de deviner !' : trackInfo.track}
             </h2>
-            <p className="text-white/70 font-medium mb-8 text-center text-lg md:text-xl">
-                {isBlindTest ? 'Trouvez le titre dans le Chat' : trackInfo.artist}
+            <p className="text-white/60 font-medium mb-8 text-center text-sm sm:text-base md:text-lg">
+                {isBlindTest ? 'Cherchez la musique dans l\'onglet de droite' : trackInfo.artist}
             </p>
             
-            <div className="flex flex-col items-center gap-8 w-full px-4">
-              <div className="flex items-center gap-8">
-                <button onClick={togglePlay} className="bg-white/20 backdrop-blur-md text-white p-5 sm:p-6 rounded-full hover:bg-white/30 hover:scale-110 transition active:scale-95 shadow-xl">
-                  {isPlaying ? <Pause className="w-8 h-8 fill-white" /> : <Play className="w-8 h-8 fill-white ml-1" />}
+            <div className="flex flex-col items-center gap-6 w-full">
+              <div className="flex items-center gap-6">
+                <button onClick={togglePlay} className="bg-white/20 backdrop-blur-md text-white p-4 sm:p-5 rounded-full hover:bg-white/30 hover:scale-110 transition active:scale-95 shadow-xl">
+                  {isPlaying ? <Pause className="w-6 h-6 fill-white" /> : <Play className="w-6 h-6 fill-white ml-1" />}
                 </button>
-                <button onClick={voteSkip} className="bg-white/10 p-5 rounded-full hover:bg-white/20 transition relative">
-                  <SkipForward className="w-6 h-6" />
+                <button onClick={voteSkip} className="bg-white/10 p-4 rounded-full hover:bg-white/20 transition relative">
+                  <SkipForward className="w-5 h-5" />
                   {skipVotes.votes > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-pink-500 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full shadow-lg">
+                    <span className="absolute -top-1 -right-1 bg-pink-500 text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full shadow-lg">
                       {skipVotes.votes}/{skipVotes.required}
                     </span>
                   )}
                 </button>
               </div>
 
-              <div className="flex items-center gap-4 w-full">
-                <Volume2 className="w-5 h-5 text-white/50" />
-                <input type="range" min="0" max="100" value={volume} onChange={changeVolume} className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white" />
-              </div>
-
-              <div className="flex gap-6 mt-2">
+              <div className="flex gap-4 mt-2">
                 {['🔥', '💃', '😍', '😴', '🍻'].map(emoji => (
-                  <button key={emoji} onClick={() => sendReaction(emoji)} className="text-3xl hover:scale-125 hover:-translate-y-2 transition-transform drop-shadow-lg">
+                  <button key={emoji} onClick={() => sendReaction(emoji)} className="text-2xl hover:scale-125 hover:-translate-y-1 transition-transform drop-shadow-md">
                     {emoji}
                   </button>
                 ))}
@@ -318,51 +369,82 @@ export default function Room() {
         </motion.div>
 
         {/* TABS (DROITE) */}
-        <div className="w-full md:w-[450px] hidden md:flex flex-col bg-white/5 backdrop-blur-2xl rounded-[3rem] shadow-2xl border border-white/10 overflow-hidden">
-          <div className="flex border-b border-white/10 bg-black/20">
-            <button onClick={() => setActiveTab('lyrics')} className={`flex-1 p-5 font-bold text-sm transition ${activeTab === 'lyrics' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'}`}><Mic2 className="w-5 h-5 mx-auto mb-1" /> {isBlindTest ? 'Scores' : 'Paroles'}</button>
-            <button onClick={() => setActiveTab('queue')} className={`flex-1 p-5 font-bold text-sm transition ${activeTab === 'queue' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'}`}><ListMusic className="w-5 h-5 mx-auto mb-1" /> Suivants</button>
-            <button onClick={() => setActiveTab('chat')} className={`flex-1 p-5 font-bold text-sm transition ${activeTab === 'chat' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'}`}><MessageCircle className="w-5 h-5 mx-auto mb-1" /> Chat</button>
+        <div className="w-full md:flex-1 flex flex-col bg-white/5 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/10 overflow-hidden h-[500px] md:h-full">
+          <div className="flex border-b border-white/5 bg-black/10">
+            {isBlindTest ? (
+                <button onClick={() => setActiveTab('search')} className={`flex-1 p-4 font-bold text-xs sm:text-sm transition ${activeTab === 'search' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'}`}><Search className="w-4 h-4 mx-auto mb-1" /> Recherche</button>
+            ) : (
+                <button onClick={() => setActiveTab('lyrics')} className={`flex-1 p-4 font-bold text-xs sm:text-sm transition ${activeTab === 'lyrics' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'}`}><Mic2 className="w-4 h-4 mx-auto mb-1" /> Paroles</button>
+            )}
+            <button onClick={() => setActiveTab('queue')} className={`flex-1 p-4 font-bold text-xs sm:text-sm transition ${activeTab === 'queue' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'}`}><ListMusic className="w-4 h-4 mx-auto mb-1" /> Suivants</button>
+            <button onClick={() => setActiveTab('chat')} className={`flex-1 p-4 font-bold text-xs sm:text-sm transition ${activeTab === 'chat' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'}`}><MessageCircle className="w-4 h-4 mx-auto mb-1" /> Chat</button>
           </div>
 
           <div className="flex-1 overflow-hidden relative">
             
-            {/* PAROLES OU SCORE BLIND TEST */}
-            {activeTab === 'lyrics' && (
-              <div ref={lyricsContainerRef} className="h-full overflow-y-auto p-8 flex flex-col gap-6 mask-image-fade">
-                {isBlindTest ? (
-                    <div className="flex flex-col items-center">
-                        <Trophy className="w-16 h-16 text-yellow-400 mb-6 drop-shadow-lg" />
-                        <h3 className="text-2xl font-black mb-6">Classement Blind Test</h3>
-                        {sortedScores.map((score: any, idx: number) => (
-                            <div key={idx} className="w-full flex justify-between items-center bg-white/10 p-4 rounded-2xl mb-3">
-                                <span className="font-bold text-lg"><span className="text-yellow-400 mr-2">#{idx+1}</span> {score[0]}</span>
-                                <span className="font-black text-pink-400">{score[1]} pts</span>
+            {/* RECHERCHE (BLIND TEST) */}
+            {activeTab === 'search' && isBlindTest && (
+                <div className="h-full flex flex-col p-4 bg-black/20">
+                    <div className="flex items-center gap-2 mb-4">
+                        <Search className="text-white/50 w-5 h-5" />
+                        <input 
+                            type="text" 
+                            placeholder="Titre, Artiste..." 
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="flex-1 bg-transparent border-none text-white focus:outline-none placeholder-white/40 text-lg"
+                        />
+                    </div>
+                    <div className="flex-1 overflow-y-auto pr-2 space-y-2">
+                        {searchResults.map((res: any, idx: number) => (
+                            <div key={idx} onClick={() => submitGuess(res.trackName, res.artistName)} className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl cursor-pointer transition">
+                                <img src={res.artworkUrl60} className="w-10 h-10 rounded-md" alt="" />
+                                <div>
+                                    <p className="text-sm font-bold text-white line-clamp-1">{res.trackName}</p>
+                                    <p className="text-xs text-white/60 line-clamp-1">{res.artistName}</p>
+                                </div>
                             </div>
                         ))}
+                        {searchResults.length === 0 && searchQuery && <p className="text-white/40 text-sm text-center mt-4">Aucun résultat trouvé.</p>}
+                        {searchResults.length === 0 && !searchQuery && (
+                            <div className="mt-8 text-center">
+                                <Trophy className="w-12 h-12 text-yellow-400 mx-auto mb-4 opacity-50" />
+                                <h3 className="text-lg font-bold text-white/50 mb-4">Classement</h3>
+                                {sortedScores.map((score: any, idx: number) => (
+                                    <div key={idx} className="flex justify-between items-center bg-white/5 p-3 rounded-xl mb-2 mx-4">
+                                        <span className="font-bold text-sm"><span className="text-yellow-400 mr-2">#{idx+1}</span> {score[0]}</span>
+                                        <span className="font-black text-pink-400 text-sm">{score[1]} pts</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
+                </div>
+            )}
+
+            {/* PAROLES */}
+            {activeTab === 'lyrics' && !isBlindTest && (
+              <div ref={lyricsContainerRef} className="h-full overflow-y-auto p-6 flex flex-col gap-4 mask-image-fade">
+                {syncedLyrics.length > 0 ? (
+                  syncedLyrics.map((lyric, idx) => {
+                    const isActive = idx === activeLyricIndex;
+                    const isPast = idx < activeLyricIndex;
+                    return (
+                      <p 
+                        key={idx} 
+                        id={isActive ? "active-lyric" : undefined}
+                        className={`text-lg sm:text-xl font-bold transition-all duration-500 ease-out cursor-default
+                          ${isActive ? 'text-white scale-105 origin-left drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]' : 
+                            isPast ? 'text-white/30 blur-[0.5px]' : 'text-white/40'}`}
+                      >
+                        {lyric.text || '🎵'}
+                      </p>
+                    );
+                  })
                 ) : (
-                    syncedLyrics.length > 0 ? (
-                      syncedLyrics.map((lyric, idx) => {
-                        const isActive = idx === activeLyricIndex;
-                        const isPast = idx < activeLyricIndex;
-                        return (
-                          <p 
-                            key={idx} 
-                            id={isActive ? "active-lyric" : undefined}
-                            className={`text-2xl font-bold transition-all duration-500 ease-out cursor-default
-                              ${isActive ? 'text-white scale-110 origin-left drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 
-                                isPast ? 'text-white/40 blur-[1px]' : 'text-white/40'}`}
-                          >
-                            {lyric.text || '🎵'}
-                          </p>
-                        );
-                      })
-                    ) : (
-                      <div className="flex items-center justify-center h-full">
-                        <p className="text-xl font-bold text-white/50 text-center whitespace-pre-line leading-relaxed">{plainLyrics}</p>
-                      </div>
-                    )
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-lg font-bold text-white/40 text-center whitespace-pre-line leading-relaxed">{plainLyrics}</p>
+                  </div>
                 )}
                 <div className="h-32" />
               </div>
@@ -370,15 +452,15 @@ export default function Room() {
 
             {/* QUEUE */}
             {activeTab === 'queue' && (
-              <div className="h-full overflow-y-auto p-6 flex flex-col gap-3">
+              <div className="h-full overflow-y-auto p-4 flex flex-col gap-2">
                 {(!trackInfo.queue || trackInfo.queue.length === 0) ? (
-                  <p className="text-white/50 text-center mt-10 font-medium">Aucune musique suivante.</p>
+                  <p className="text-white/40 text-center mt-10 text-sm font-medium">Aucune musique suivante.</p>
                 ) : trackInfo.queue.map((q: any, idx: number) => (
-                  <div key={idx} className="flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition">
-                    <div className="text-white/30 font-black w-6 text-right">{idx + 1}</div>
+                  <div key={idx} className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-xl transition">
+                    <div className="text-white/30 font-black text-xs w-4 text-right">{idx + 1}</div>
                     <div className="flex-1 overflow-hidden">
-                      <p className="font-bold text-white truncate">{q.track}</p>
-                      <p className="text-sm text-white/60 truncate">{q.artist}</p>
+                      <p className="font-bold text-white text-sm truncate">{q.track}</p>
+                      <p className="text-xs text-white/50 truncate">{q.artist}</p>
                     </div>
                   </div>
                 ))}
@@ -388,21 +470,21 @@ export default function Room() {
             {/* CHAT */}
             {activeTab === 'chat' && (
               <div className="flex flex-col h-full p-4">
-                <div className="flex-1 overflow-y-auto mb-4 flex flex-col gap-3 pr-2">
+                <div className="flex-1 overflow-y-auto mb-3 flex flex-col gap-2 pr-1">
                   {chatMessages.map((msg, i) => (
-                    <div key={i} className={`p-4 rounded-3xl max-w-[85%] 
-                        ${msg.username === "🤖 Arbitre" ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white self-center w-full text-center shadow-lg' : 
-                          msg.username === username ? 'bg-pink-500 text-white self-end rounded-br-md' : 
-                          'bg-white/10 backdrop-blur-md text-white self-start rounded-bl-md'}`}>
-                      {msg.username !== "🤖 Arbitre" && <p className="text-xs opacity-70 mb-1 font-bold">{msg.username} <span className="font-normal ml-1">{msg.time}</span></p>}
-                      <p className="text-sm font-medium leading-relaxed">{msg.text}</p>
+                    <div key={i} className={`p-3 rounded-2xl max-w-[90%] 
+                        ${msg.username === "🤖 Arbitre" ? 'bg-white/10 text-white self-center w-full text-center text-xs' : 
+                          msg.username === username ? 'bg-pink-500/80 text-white self-end rounded-br-md' : 
+                          'bg-white/10 text-white self-start rounded-bl-md'}`}>
+                      {msg.username !== "🤖 Arbitre" && <p className="text-[10px] opacity-60 mb-0.5 font-bold">{msg.username} <span className="font-normal ml-1">{msg.time}</span></p>}
+                      <p className="text-xs sm:text-sm font-medium leading-relaxed">{msg.text}</p>
                     </div>
                   ))}
                   <div ref={chatEndRef} />
                 </div>
                 <form onSubmit={sendChatMessage} className="flex gap-2">
-                  <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder={isBlindTest ? "Tapez le titre de la musique !" : "Message..."} className="flex-1 p-4 bg-black/30 border border-white/10 rounded-2xl text-white placeholder-white/40 focus:outline-none focus:border-pink-500 transition" />
-                  <button type="submit" className="bg-pink-500 text-white p-4 rounded-2xl font-bold hover:bg-pink-600 transition shadow-lg shadow-pink-500/30">Envoyer</button>
+                  <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Message..." className="flex-1 p-3 text-sm bg-black/40 border border-white/5 rounded-xl text-white placeholder-white/30 focus:outline-none focus:border-pink-500/50 transition" />
+                  <button type="submit" className="bg-pink-500 text-white p-3 rounded-xl text-sm font-bold hover:bg-pink-600 transition">Go</button>
                 </form>
               </div>
             )}
@@ -414,52 +496,47 @@ export default function Room() {
       <AnimatePresence>
           {showWrapped && wrappedData && (
               <motion.div 
-                  initial={{ opacity: 0, y: 100 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -100 }}
-                  className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center p-6"
+                  initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+                  className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-4"
               >
                   <Confetti width={window.innerWidth} height={window.innerHeight} />
-                  <button onClick={() => setShowWrapped(false)} className="absolute top-8 right-8 text-white/50 hover:text-white"><X className="w-8 h-8" /></button>
+                  <button onClick={() => setShowWrapped(false)} className="absolute top-6 right-6 bg-white/10 p-2 rounded-full text-white hover:bg-white/20"><X className="w-6 h-6" /></button>
                   
-                  <div className="max-w-lg w-full aspect-[9/16] bg-gradient-to-br from-pink-600 via-purple-600 to-indigo-900 rounded-[3rem] shadow-2xl p-10 flex flex-col items-center justify-center text-center relative overflow-hidden cursor-pointer" onClick={() => setWrappedStep((s) => (s + 1) % 3)}>
-                      
+                  <div className="max-w-md w-full aspect-[9/16] bg-gradient-to-b from-pink-600 to-indigo-900 rounded-3xl shadow-2xl p-8 flex flex-col items-center justify-center text-center relative overflow-hidden cursor-pointer" onClick={() => setWrappedStep((s) => (s + 1) % 3)}>
                       {wrappedStep === 0 && (
                           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center">
-                              <Music className="w-24 h-24 mb-6 text-white" />
-                              <h2 className="text-5xl font-black mb-4">ListenParty<br/>Wrapped</h2>
-                              <p className="text-xl font-medium text-white/80">Quelle soirée incroyable !<br/>Appuyez pour voir le récap.</p>
+                              <Music className="w-16 h-16 mb-4 text-white" />
+                              <h2 className="text-4xl font-black mb-3">ListenParty<br/>Wrapped</h2>
+                              <p className="text-sm font-medium text-white/70">Quelle soirée incroyable !<br/>Appuyez pour voir le récap.</p>
                           </motion.div>
                       )}
-
                       {wrappedStep === 1 && (
-                          <motion.div initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="flex flex-col items-center w-full">
-                              <h3 className="text-3xl font-black mb-8 text-pink-200">Stats de la Soirée</h3>
-                              <div className="bg-black/30 w-full p-6 rounded-3xl mb-4 border border-white/10">
-                                  <p className="text-5xl font-black mb-2">{wrappedData.history.length}</p>
-                                  <p className="text-lg text-white/70">Musiques écoutées</p>
+                          <motion.div initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="flex flex-col items-center w-full">
+                              <h3 className="text-2xl font-black mb-6 text-pink-200">Stats de la Soirée</h3>
+                              <div className="bg-black/20 w-full p-5 rounded-2xl mb-4 border border-white/5">
+                                  <p className="text-4xl font-black mb-1">{wrappedData.history.length}</p>
+                                  <p className="text-sm text-white/60">Musiques écoutées</p>
                               </div>
-                              <div className="bg-black/30 w-full p-6 rounded-3xl border border-white/10">
-                                  <p className="text-5xl font-black mb-2">{wrappedData.stats.emojisSent}</p>
-                                  <p className="text-lg text-white/70">Émojis envoyés</p>
+                              <div className="bg-black/20 w-full p-5 rounded-2xl border border-white/5">
+                                  <p className="text-4xl font-black mb-1">{wrappedData.stats.emojisSent}</p>
+                                  <p className="text-sm text-white/60">Émojis envoyés</p>
                               </div>
                           </motion.div>
                       )}
-
                       {wrappedStep === 2 && (
-                          <motion.div initial={{ x: 100, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="flex flex-col items-center w-full">
-                              <h3 className="text-3xl font-black mb-8 text-yellow-200">Les Champions du Blind Test</h3>
+                          <motion.div initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="flex flex-col items-center w-full">
+                              <h3 className="text-2xl font-black mb-6 text-yellow-200">Les Champions 🏆</h3>
                               {Object.entries(wrappedData.scores).sort((a:any, b:any) => b[1] - a[1]).slice(0, 3).map((score: any, idx: number) => (
-                                  <div key={idx} className="bg-black/30 w-full p-4 rounded-2xl mb-3 flex justify-between items-center border border-white/10">
-                                      <span className="font-bold text-xl"><span className="text-yellow-400 mr-2">#{idx+1}</span> {score[0]}</span>
-                                      <span className="font-black text-pink-300">{score[1]} pts</span>
+                                  <div key={idx} className="bg-black/20 w-full p-4 rounded-xl mb-2 flex justify-between items-center border border-white/5">
+                                      <span className="font-bold text-sm"><span className="text-yellow-400 mr-2">#{idx+1}</span> {score[0]}</span>
+                                      <span className="font-black text-pink-300 text-sm">{score[1]} pts</span>
                                   </div>
                               ))}
-                              {Object.keys(wrappedData.scores).length === 0 && <p className="text-white/60 text-lg">Aucune partie de Blind Test n'a été jouée.</p>}
-                              <p className="text-white/40 mt-10 text-sm">Appuyez pour fermer</p>
+                              {Object.keys(wrappedData.scores).length === 0 && <p className="text-white/50 text-sm">Aucun Blind Test joué.</p>}
+                              <p className="text-white/30 mt-8 text-xs uppercase tracking-wider">Appuyez pour fermer</p>
                           </motion.div>
                       )}
-                      
-                      {/* Progress bar story style */}
-                      <div className="absolute top-6 left-6 right-6 flex gap-2">
+                      <div className="absolute top-4 left-4 right-4 flex gap-1">
                           {[0, 1, 2].map((i) => (
                               <div key={i} className={`h-1 flex-1 rounded-full ${i <= wrappedStep ? 'bg-white' : 'bg-white/20'}`} />
                           ))}
@@ -469,7 +546,7 @@ export default function Room() {
           )}
       </AnimatePresence>
 
-      <style jsx global>{`.mask-image-fade { mask-image: linear-gradient(to bottom, transparent, black 10%, black 70%, transparent 100%); } .animate-spin-slow { animation: spin 4s linear infinite; }`}</style>
+      <style jsx global>{`.mask-image-fade { mask-image: linear-gradient(to bottom, transparent, black 5%, black 80%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, transparent, black 5%, black 80%, transparent 100%);} .animate-spin-slow { animation: spin 4s linear infinite; }`}</style>
     </div>
   );
 }
