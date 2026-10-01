@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import io from "socket.io-client";
 import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Pause, Users, ListMusic, MessageCircle, SkipForward, Mic2, X, Maximize2, Search, Trophy, Music, Disc } from "lucide-react";
+import { Play, Pause, Users, ListMusic, MessageCircle, SkipForward, Mic2, X, Maximize2, Search, Trophy, Music, Disc, ChevronLeft } from "lucide-react";
 import Confetti from 'react-confetti';
 
 let socket: any;
 
 export default function Room() {
+  const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
   const roomId = params.id as string;
@@ -216,6 +217,11 @@ export default function Room() {
       setSearchResults([]);
   };
 
+  const leaveRoom = () => {
+      if (socket) socket.disconnect();
+      router.push("/");
+  };
+
   let activeLyricIndex = -1;
   for (let i = 0; i < syncedLyrics.length; i++) {
     if (currentPlaybackTime >= syncedLyrics[i].time) activeLyricIndex = i;
@@ -276,14 +282,19 @@ export default function Room() {
 
       {/* HEADER */}
       <header className="w-full max-w-6xl hidden md:flex justify-between items-center mb-6 bg-white/10 backdrop-blur-xl p-5 rounded-2xl shadow-xl border border-white/10 relative z-10">
-        <div>
-          <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
-              ListenParty <span className="text-pink-400">#{roomId}</span>
-              {isBlindTest && <span className="bg-purple-500 text-white text-xs px-3 py-1 rounded-full animate-pulse uppercase">Blind Test</span>}
-          </h1>
-          <p className="text-white/60 font-medium flex items-center gap-2 mt-1 text-sm">
-            <Users className="w-4 h-4" /> {users.length} ami(s) connecté(s)
-          </p>
+        <div className="flex items-center gap-4">
+          <button onClick={leaveRoom} className="p-3 bg-white/10 hover:bg-white/20 rounded-xl transition text-white/70 hover:text-white">
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
+                ListenParty <span className="text-pink-400">#{roomId}</span>
+                {isBlindTest && <span className="bg-purple-500 text-white text-xs px-3 py-1 rounded-full animate-pulse uppercase">Blind Test</span>}
+            </h1>
+            <p className="text-white/60 font-medium flex items-center gap-2 mt-1 text-sm">
+              <Users className="w-4 h-4" /> {users.length} ami(s) connecté(s)
+            </p>
+          </div>
         </div>
         
         <div className="flex gap-4 items-center">
@@ -307,11 +318,14 @@ export default function Room() {
             
             {/* Mobile Actions */}
             <div className="md:hidden flex w-full justify-between items-center mb-6">
-                <button onClick={() => setQrExpanded(true)} className="bg-white/10 px-4 py-2 rounded-full text-xs font-bold border border-white/20">
+                <button onClick={leaveRoom} className="bg-white/10 p-2 rounded-full border border-white/20 hover:bg-white/20 transition">
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button onClick={() => setQrExpanded(true)} className="bg-white/10 px-4 py-2 rounded-full text-xs font-bold border border-white/20 mx-2 flex-1 text-center truncate">
                   PIN: {roomId}
                 </button>
                 <button onClick={toggleBlindTest} className={`px-4 py-2 rounded-full text-xs font-bold ${isBlindTest ? 'bg-red-500' : 'bg-purple-500'}`}>
-                    {isBlindTest ? 'Stop Blind Test' : 'Blind Test'}
+                    {isBlindTest ? 'Stop' : 'Blind Test'}
                 </button>
             </div>
 

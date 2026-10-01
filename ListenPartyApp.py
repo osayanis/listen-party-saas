@@ -91,9 +91,11 @@ class ListenPartyStatusBarApp(rumps.App):
     def settings_dialog(self, _):
         window = rumps.Window(
             message="Entrez l'URL de votre serveur (ex: http://192.168.1.5:3000)\n\nLaissez vide pour utiliser le Serveur Cloud Officiel.",
-            title="Paramètres Serveur",
+            title="⚙️ Paramètres Serveur",
             default_text=self.config.get('server_url', ''),
-            cancel=True
+            cancel="Annuler",
+            ok="Sauvegarder",
+            dimensions=(300, 22)
         )
         response = window.run()
         if response.clicked:
@@ -112,10 +114,12 @@ class ListenPartyStatusBarApp(rumps.App):
     @rumps.clicked("Rejoindre un Salon")
     def join_room_dialog(self, _):
         window = rumps.Window(
-            message="Entrez le code PIN affiché sur le site web :",
-            title="ListenParty",
+            message="Entrez le code PIN à 6 chiffres affiché sur le site web :",
+            title="🎧 Rejoindre un Salon",
             default_text="",
-            cancel=True
+            cancel="Annuler",
+            ok="Rejoindre",
+            dimensions=(200, 22)
         )
         response = window.run()
         if response.clicked and response.text.strip():
