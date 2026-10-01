@@ -23,7 +23,7 @@ export default function Room() {
   const [coverUrl, setCoverUrl] = useState("https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=600&q=80");
 
   const fetchArtwork = async (track: string, artist: string) => {
-    if (track === "Aucune musique" || track === "En attente du Bridge...") return;
+    if (!track || track === "Aucune musique" || track === "En attente du Bridge...") return;
     try {
       const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(track + " " + artist)}&entity=song&limit=1`);
       const data = await res.json();
@@ -47,21 +47,25 @@ export default function Room() {
       if (roomData.trackInfo) {
         setTrackInfo(roomData.trackInfo);
         setIsPlaying(roomData.trackInfo.state === "playing");
+        // FIX: Charger l'image immédiatement si on actualise la page
+        fetchArtwork(roomData.trackInfo.track, roomData.trackInfo.artist);
       }
     });
 
     socket.on("bridge-state", (state: any) => {
-      if (state.track !== trackInfo.track) {
-        fetchArtwork(state.track, state.artist);
-      }
-      setTrackInfo(state);
+      setTrackInfo((prev) => {
+        if (prev.track !== state.track || prev.artist !== state.artist) {
+          fetchArtwork(state.track, state.artist);
+        }
+        return state;
+      });
       setIsPlaying(state.state === "playing");
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [roomId, username, trackInfo.track]);
+  }, [roomId, username]); // FIX: Retrait de trackInfo.track pour éviter les déconnexions Socket intempestives
 
   const togglePlay = () => {
     const newState = isPlaying ? "paused" : "playing";

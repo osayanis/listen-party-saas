@@ -74,6 +74,11 @@ def get_music_state():
 def connect():
     print(f"\n✅ Connecté au SaaS ListenParty ! Vous avez rejoint le salon : {ROOM_ID}")
     sio.emit('join-room', (ROOM_ID, 'MacBridge-Helper'))
+    
+    # Forcer la mise à jour immédiate pour les utilisateurs déjà connectés au site Web
+    current_state = get_music_state()
+    if current_state['state'] != 'stopped':
+        sio.emit('bridge-state', (ROOM_ID, current_state))
 
 @sio.on('web-action')
 def on_web_action(data):
