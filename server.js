@@ -23,7 +23,7 @@ app.prepare().then(() => {
   io.on("connection", (socket) => {
     
     socket.on("join-room", (roomId, username) => {
-      socket.join(roomId);
+      
       if (!rooms[roomId]) {
         rooms[roomId] = {
           users: [],
@@ -32,8 +32,23 @@ app.prepare().then(() => {
           isBlindTest: false,
           blindTestScores: {},
           history: [],
-          stats: { emojisSent: 0, messagesSent: 0, skips: 0 }
+          stats: { emojisSent: 0, messagesSent: 0, skips: 0 },
+          hostId: null,
+          isLocked: false
         };
+      }
+
+      // Si le salon est verrouillé, on rejette (sauf le MacBridge)
+      if (rooms[roomId].isLocked && !username.includes("MacBridge")) {
+          socket.emit("room-locked");
+          return;
+      }
+
+      socket.join(roomId);
+
+      // Assigner l'hôte si c'est le premier humain
+      if (!rooms[roomId].hostId && !username.includes("MacBridge")) {
+          rooms[roomId].hostId = socket.id;
       }
       
       const existingUserIndex = rooms[roomId].users.findIndex(u => u.id === socket.id);
@@ -49,7 +64,9 @@ app.prepare().then(() => {
         trackInfo: rooms[roomId].trackInfo,
         skipVotes: rooms[roomId].skipVotes.size,
         isBlindTest: rooms[roomId].isBlindTest,
-        blindTestScores: rooms[roomId].blindTestScores
+        blindTestScores: rooms[roomId].blindTestScores,
+        hostId: rooms[roomId].hostId,
+        isLocked: rooms[roomId].isLocked
       });
     });
 
@@ -86,10 +103,8 @@ app.prepare().then(() => {
         
         const currentTrack = rooms[roomId].trackInfo.track.toLowerCase().replace(/[^a-z0-9]/g, '');
         const currentArtist = rooms[roomId].trackInfo.artist.toLowerCase().replace(/[^a-z0-9]/g, '');
-        
         const gTrack = guessTrack.toLowerCase().replace(/[^a-z0-9]/g, '');
         
-        // Validation basique : si le titre deviné correspond au vrai titre
         if (currentTrack.includes(gTrack) || gTrack.includes(currentTrack)) {
             rooms[roomId].blindTestScores[username] += 10;
             const systemMessage = `🎉 ${username} a trouvé la bonne réponse ! (+10 pts)`;
@@ -97,7 +112,7 @@ app.prepare().then(() => {
             io.to(roomId).emit("blind-test-scores", rooms[roomId].blindTestScores);
             io.to(roomId).emit("blind-test-winner", { username, track: rooms[roomId].trackInfo.track, artist: rooms[roomId].trackInfo.artist });
         } else {
-            socket.emit("blind-test-wrong"); // Notify the guesser that it's wrong
+            socket.emit("blind-test-wrong"); 
         }
     });
 
@@ -108,6 +123,7 @@ app.prepare().then(() => {
         }
     });
 
+    // --- WRAPPED ---
     socket.on("get-wrapped", (roomId, callback) => {
         if (rooms[roomId] && callback) {
             callback({
@@ -118,6 +134,38 @@ app.prepare().then(() => {
         }
     });
 
+    // --- MODÉRATION (Hôte) ---
+    socket.on("kick-user", (roomId, targetId) => {
+        if (rooms[roomId] && rooms[roomId].hostId === socket.id) {
+            io.to(targetId).emit("kicked");
+            const targetSocket = io.sockets.sockets.get(targetId);
+            if (targetSocket) targetSocket.disconnect();
+        }
+    });
+
+    socket.on("force-skip", (roomId) => {
+        if (rooms[roomId] && rooms[roomId].hostId === socket.id) {
+            rooms[roomId].stats.skips++;
+            io.to(roomId).emit("web-action", { state: 'skip' });
+            rooms[roomId].skipVotes.clear();
+        }
+    });
+
+    socket.on("toggle-lock", (roomId) => {
+        if (rooms[roomId] && rooms[roomId].hostId === socket.id) {
+            rooms[roomId].isLocked = !rooms[roomId].isLocked;
+            io.to(roomId).emit("room-update", {
+                users: rooms[roomId].users,
+                trackInfo: rooms[roomId].trackInfo,
+                isBlindTest: rooms[roomId].isBlindTest,
+                blindTestScores: rooms[roomId].blindTestScores,
+                hostId: rooms[roomId].hostId,
+                isLocked: rooms[roomId].isLocked
+            });
+        }
+    });
+
+    // --- REACTIONS & VOTES ---
     socket.on("send-reaction", (roomId, emoji) => {
       if (rooms[roomId]) rooms[roomId].stats.emojisSent++;
       io.to(roomId).emit("new-reaction", { emoji, id: Date.now() + Math.random() });
@@ -143,11 +191,20 @@ app.prepare().then(() => {
       for (const roomId in rooms) {
         rooms[roomId].users = rooms[roomId].users.filter(u => u.id !== socket.id);
         rooms[roomId].skipVotes.delete(socket.id);
+        
+        // Réassigner l'hôte si l'hôte part
+        if (rooms[roomId].hostId === socket.id) {
+            const nextHuman = rooms[roomId].users.find(u => !u.username.includes("MacBridge"));
+            rooms[roomId].hostId = nextHuman ? nextHuman.id : null;
+        }
+
         io.to(roomId).emit("room-update", {
           users: rooms[roomId].users,
           trackInfo: rooms[roomId].trackInfo,
           isBlindTest: rooms[roomId].isBlindTest,
-          blindTestScores: rooms[roomId].blindTestScores
+          blindTestScores: rooms[roomId].blindTestScores,
+          hostId: rooms[roomId].hostId,
+          isLocked: rooms[roomId].isLocked
         });
       }
     });
