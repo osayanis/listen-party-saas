@@ -3,24 +3,27 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Download, Music, Plus } from "lucide-react";
+import { ArrowRight, Download, Music, Plus, Loader2 } from "lucide-react";
 import Image from "next/image";
 
 export default function Home() {
   const [roomId, setRoomId] = useState("");
   const [username, setUsername] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (roomId && username) {
+      setIsLoading(true);
       router.push(`/room/${roomId}?username=${encodeURIComponent(username)}`);
     }
   };
 
   const createRoom = () => {
-    const newRoom = Math.floor(100000 + Math.random() * 900000).toString();
     if (username) {
+      setIsLoading(true);
+      const newRoom = Math.floor(100000 + Math.random() * 900000).toString();
       router.push(`/room/${newRoom}?username=${encodeURIComponent(username)}`);
     } else {
       alert("Veuillez entrer un pseudo pour créer un salon !");
@@ -83,10 +86,10 @@ export default function Home() {
                 />
                 <button 
                   type="submit" 
-                  disabled={!roomId || !username}
+                  disabled={!roomId || !username || isLoading}
                   className="aspect-square h-full bg-pink-500 hover:bg-pink-400 disabled:opacity-50 disabled:hover:bg-pink-500 text-white rounded-2xl transition-all flex items-center justify-center group shadow-lg shadow-pink-500/25"
                 >
-                  <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                  {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />}
                 </button>
               </div>
             </div>
@@ -102,10 +105,11 @@ export default function Home() {
           {/* Create Button */}
           <button 
             onClick={createRoom}
-            className="w-full bg-white text-black p-4 rounded-2xl font-bold hover:bg-gray-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+            disabled={isLoading}
+            className="w-full bg-white text-black p-4 rounded-2xl font-bold hover:bg-gray-200 transition-all active:scale-[0.98] disabled:opacity-70 disabled:hover:bg-white flex items-center justify-center gap-2"
           >
-            <Plus className="w-5 h-5" />
-            Créer un nouveau salon
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+            {isLoading ? "Création du salon..." : "Créer un nouveau salon"}
           </button>
         </div>
       </motion.div>
