@@ -46,7 +46,7 @@ export default function Home() {
           {/* Logo & Header */}
           <div className="flex flex-col items-center mb-8">
             <div className="w-20 h-20 relative rounded-3xl overflow-hidden shadow-[0_0_40px_-10px_rgba(236,72,153,0.4)] border border-white/10 mb-6">
-              <Image src="/logo.jpg" alt="ListenParty Logo" fill className="object-cover" />
+              <Image src="/logo.jpg" alt="ListenParty Logo" fill className="object-cover" unoptimized={true} />
             </div>
             <h1 className="text-3xl font-bold text-center tracking-tight bg-gradient-to-br from-white to-white/60 bg-clip-text text-transparent">
               ListenParty
