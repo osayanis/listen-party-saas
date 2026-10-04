@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Download } from "lucide-react";
+import { ArrowRight, Download, Music, Plus } from "lucide-react";
 import Image from "next/image";
 
 export default function Home() {
@@ -28,89 +28,104 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4 text-white relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4 text-white relative overflow-hidden font-sans selection:bg-pink-500/30">
       
-      {/* Design Apple Music Style : Formes floutées discrètes */}
-      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-pink-500/20 rounded-full blur-[120px] pointer-events-none mix-blend-screen" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-purple-500/20 rounded-full blur-[150px] pointer-events-none mix-blend-screen" />
+      {/* Background Orbs */}
+      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-pink-600/10 rounded-full blur-[120px] pointer-events-none mix-blend-screen transform -translate-y-1/2" />
+      <div className="absolute bottom-0 right-1/4 w-[800px] h-[800px] bg-purple-600/10 rounded-full blur-[150px] pointer-events-none mix-blend-screen transform translate-y-1/3" />
 
+      {/* Main Card */}
+      <motion.div 
+        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="w-full max-w-[420px] relative z-10"
+      >
+        <div className="bg-[#0f0f0f]/90 backdrop-blur-3xl border border-white/[0.08] p-8 md:p-10 rounded-[2.5rem] shadow-2xl shadow-black/50">
+          
+          {/* Logo & Header */}
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-20 h-20 relative rounded-3xl overflow-hidden shadow-[0_0_40px_-10px_rgba(236,72,153,0.4)] border border-white/10 mb-6">
+              <Image src="/logo.jpg" alt="ListenParty Logo" fill className="object-cover" />
+            </div>
+            <h1 className="text-3xl font-bold text-center tracking-tight bg-gradient-to-br from-white to-white/60 bg-clip-text text-transparent">
+              ListenParty
+            </h1>
+            <p className="text-center text-white/40 font-medium text-sm mt-2 flex items-center justify-center gap-2">
+              <Music className="w-4 h-4" /> Connecte Spotify ou Apple Music
+            </p>
+          </div>
+
+          <form onSubmit={handleJoin} className="flex flex-col gap-5">
+            {/* Username Input */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest pl-1">Ton Pseudo</label>
+              <input 
+                type="text" 
+                placeholder="Ex: Yanis" 
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full bg-white/[0.03] border border-white/[0.08] text-white p-4 rounded-2xl focus:outline-none focus:border-pink-500/50 focus:bg-white/[0.05] transition-all placeholder:text-white/20 font-medium"
+                required
+              />
+            </div>
+
+            {/* PIN & Submit */}
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest pl-1">Rejoindre un salon</label>
+              <div className="flex gap-3">
+                <input 
+                  type="text" 
+                  placeholder="CODE PIN" 
+                  value={roomId}
+                  onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+                  className="flex-1 bg-white/[0.03] border border-white/[0.08] text-white p-4 rounded-2xl focus:outline-none focus:border-pink-500/50 focus:bg-white/[0.05] transition-all placeholder:text-white/20 font-bold tracking-[0.2em] uppercase"
+                />
+                <button 
+                  type="submit" 
+                  disabled={!roomId || !username}
+                  className="aspect-square h-full bg-pink-500 hover:bg-pink-400 disabled:opacity-50 disabled:hover:bg-pink-500 text-white rounded-2xl transition-all flex items-center justify-center group shadow-lg shadow-pink-500/25"
+                >
+                  <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            </div>
+          </form>
+
+          {/* Divider */}
+          <div className="my-8 flex items-center gap-4">
+            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent flex-1"></div>
+            <span className="text-white/30 text-[10px] font-bold uppercase tracking-widest">Ou</span>
+            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent flex-1"></div>
+          </div>
+
+          {/* Create Button */}
+          <button 
+            onClick={createRoom}
+            className="w-full bg-white text-black p-4 rounded-2xl font-bold hover:bg-gray-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Créer un nouveau salon
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Mac App Download */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white/[0.03] backdrop-blur-2xl border border-white/10 p-8 md:p-10 rounded-3xl relative z-10"
-      >
-        <div className="flex justify-center mb-6">
-          <div className="w-20 h-20 relative rounded-2xl overflow-hidden shadow-lg shadow-pink-500/10 border border-white/5">
-            <Image src="/logo.jpg" alt="ListenParty Logo" fill className="object-cover" />
-          </div>
-        </div>
-
-        <h1 className="text-3xl md:text-4xl font-extrabold text-center mb-2 tracking-tight">ListenParty</h1>
-        <p className="text-center text-white/50 mb-10 font-medium text-sm md:text-base">
-          Écoutez Apple Music ou Spotify entre amis.
-        </p>
-
-        <form onSubmit={handleJoin} className="flex flex-col gap-4">
-          <div>
-            <label className="text-xs font-bold text-white/60 mb-2 block uppercase tracking-wider ml-1">Ton Pseudo</label>
-            <input 
-              type="text" 
-              placeholder="Ex: Yanis" 
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-black/40 border border-white/5 text-white p-4 rounded-xl focus:outline-none focus:border-pink-500/50 transition placeholder:text-white/20 font-medium"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-white/60 mb-2 block uppercase tracking-wider ml-1">Code du salon (PIN)</label>
-            <div className="flex gap-2">
-              <input 
-                type="text" 
-                placeholder="123456" 
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-                className="flex-1 bg-black/40 border border-white/5 text-white p-4 rounded-xl focus:outline-none focus:border-pink-500/50 transition placeholder:text-white/20 font-bold tracking-widest uppercase"
-              />
-              <button 
-                type="submit" 
-                className="bg-white text-black px-6 rounded-xl font-bold hover:bg-pink-500 hover:text-white transition group flex items-center justify-center"
-              >
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition" />
-              </button>
-            </div>
-          </div>
-        </form>
-
-        <div className="mt-8 flex items-center gap-4">
-          <div className="h-px bg-white/5 flex-1"></div>
-          <span className="text-white/30 text-xs font-bold uppercase tracking-wider">OU</span>
-          <div className="h-px bg-white/5 flex-1"></div>
-        </div>
-
-        <button 
-          onClick={createRoom}
-          className="w-full mt-8 bg-white/[0.05] border border-white/10 text-white p-4 rounded-xl font-bold hover:bg-white/10 transition active:scale-[0.98]"
-        >
-          Créer un nouveau salon
-        </button>
-      </motion.div>
-
-      {/* FOOTER : TÉLÉCHARGER L'APP */}
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-        className="absolute bottom-8 z-10"
+        transition={{ delay: 0.4, duration: 0.5 }}
+        className="mt-12 relative z-10"
       >
         <a 
           href="https://github.com/osayanis/listen-party-saas" 
           target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-2 bg-white/5 backdrop-blur-md border border-white/10 px-5 py-2.5 rounded-full hover:bg-white/10 transition cursor-pointer group"
+          className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.08] px-6 py-3.5 rounded-full hover:bg-white/[0.08] hover:border-white/20 transition-all cursor-pointer group"
         >
-          <Download className="w-4 h-4 text-white/70 group-hover:-translate-y-0.5 transition" />
-          <span className="text-white/90 font-semibold text-sm">App Mac (Bridge)</span>
+          <div className="bg-white/10 p-1.5 rounded-full">
+            <Download className="w-4 h-4 text-white group-hover:-translate-y-0.5 transition-transform" />
+          </div>
+          <span className="text-white/70 group-hover:text-white font-medium text-sm">Télécharger pour Mac</span>
         </a>
       </motion.div>
 
