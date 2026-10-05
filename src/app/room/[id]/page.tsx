@@ -242,13 +242,13 @@ export default function Room() {
 
   const exportPlaylist = () => {
       if (!wrappedData) return;
-      const text = "🎵 ListenParty Playlist - " + new Date().toLocaleDateString() + "\n\n" + 
+      const text = "🎵 OsaParty Playlist - " + new Date().toLocaleDateString() + "\n\n" + 
                    wrappedData.history.map((h:any, i:number) => `${i+1}. ${h.track} - ${h.artist}`).join('\n');
       const blob = new Blob([text], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `ListenParty_Playlist_${roomId}.txt`;
+      a.download = `OsaParty_Playlist_${roomId}.txt`;
       a.click();
   };
 
@@ -301,7 +301,7 @@ export default function Room() {
           </button>
           <div>
             <h1 className="text-2xl font-black flex items-center gap-3 tracking-tight">
-                ListenParty <span className="text-pink-400">#{roomId}</span>
+                OsaParty <span className="text-pink-400">#{roomId}</span>
                 {isLocked && <Lock className="w-4 h-4 text-red-400" />}
                 {isBlindTest && <span className="bg-purple-500 text-white text-xs px-3 py-1 rounded-full animate-pulse uppercase">Blind Test</span>}
             </h1>
@@ -563,7 +563,7 @@ export default function Room() {
                       {wrappedStep === 0 && (
                           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center z-10">
                               <Music className="w-20 h-20 mb-6 text-white drop-shadow-lg" />
-                              <h2 className="text-5xl font-black mb-4 tracking-tighter drop-shadow-md">ListenParty<br/>Wrapped</h2>
+                              <h2 className="text-5xl font-black mb-4 tracking-tighter drop-shadow-md">OsaParty<br/>Wrapped</h2>
                               <p className="text-base font-medium text-white/80 bg-black/20 px-4 py-2 rounded-full">Quelle soirée ! Appuyez pour le récap.</p>
                           </motion.div>
                       )}

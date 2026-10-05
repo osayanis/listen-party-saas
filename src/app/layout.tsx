@@ -14,14 +14,14 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "ListenParty SaaS",
+  title: "OsaParty SaaS",
   description: "Synchronisez Apple Music entre amis",
   manifest: "/manifest.json",
   themeColor: "#ec4899",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "ListenParty",
+    title: "OsaParty",
   },
 };
 
