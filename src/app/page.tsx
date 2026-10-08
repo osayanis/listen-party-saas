@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, Download, Music, Plus, Loader2 } from "lucide-react";
-import Image from "next/image";
+import { ArrowRight, Download, Music, Plus, Loader2, Key } from "lucide-react";
 
 export default function Home() {
   const [roomId, setRoomId] = useState("");
@@ -31,108 +30,88 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4 text-white relative overflow-hidden font-sans selection:bg-pink-500/30">
-      
-      {/* Background Orbs */}
-      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-pink-600/10 rounded-full blur-[120px] pointer-events-none mix-blend-screen transform -translate-y-1/2" />
-      <div className="absolute bottom-0 right-1/4 w-[800px] h-[800px] bg-purple-600/10 rounded-full blur-[150px] pointer-events-none mix-blend-screen transform translate-y-1/3" />
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-4 text-white relative overflow-hidden font-sans">
 
-      {/* Main Card */}
-      <motion.div 
-        initial={{ opacity: 0, y: 30, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="w-full max-w-[420px] relative z-10"
+      {/* Halos radiaux — identiques à OsaDrop / OsaCast */}
+      <div className="fixed top-[-250px] left-[-250px] w-[1000px] h-[1000px] bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.2)_0%,transparent_50%)] pointer-events-none z-0" />
+      <div className="fixed bottom-[-250px] right-[-250px] w-[1000px] h-[1000px] bg-[radial-gradient(circle_at_center,rgba(147,51,234,0.15)_0%,transparent_50%)] pointer-events-none z-0" />
+
+      {/* En-tête */}
+      <div className="relative z-10 text-center mb-10">
+        <h1 className="text-5xl font-black mb-4 tracking-tight">OsaParty</h1>
+        <div className="flex items-center justify-center gap-2 text-white/50 font-medium">
+          <Music className="w-5 h-5 text-blue-400" />
+          <span>Écoute synchronisée. Lecture partagée entre amis.</span>
+        </div>
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="w-full max-w-md glass-card rounded-3xl p-8 space-y-8 relative z-10"
       >
-        <div className="bg-[#0f0f0f]/90 backdrop-blur-3xl border border-white/[0.08] p-8 md:p-10 rounded-[2.5rem] shadow-2xl shadow-black/50">
-          
-          {/* Logo & Header */}
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-20 h-20 relative rounded-3xl overflow-hidden shadow-[0_0_40px_-10px_rgba(236,72,153,0.4)] border border-white/10 mb-6">
-              <Image src="/logo.jpg" alt="OsaParty Logo" fill className="object-cover" unoptimized={true} />
-            </div>
-            <h1 className="text-3xl font-bold text-center tracking-tight bg-gradient-to-br from-white to-white/60 bg-clip-text text-transparent">
-              OsaParty
-            </h1>
-            <p className="text-center text-white/40 font-medium text-sm mt-2 flex items-center justify-center gap-2">
-              <Music className="w-4 h-4" /> Connecte Spotify ou Apple Music
-            </p>
-          </div>
+        {/* Pseudo */}
+        <div>
+          <label className="block text-sm font-bold mb-2 text-white/70">Ton pseudo</label>
+          <input
+            type="text"
+            placeholder="Ex: Yanis"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-4 text-white font-medium focus:outline-none focus:border-blue-500 transition placeholder:text-white/30"
+          />
+        </div>
 
-          <form onSubmit={handleJoin} className="flex flex-col gap-5">
-            {/* Username Input */}
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest pl-1">Ton Pseudo</label>
-              <input 
-                type="text" 
-                placeholder="Ex: Yanis" 
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-white/[0.03] border border-white/[0.08] text-white p-4 rounded-2xl focus:outline-none focus:border-pink-500/50 focus:bg-white/[0.05] transition-all placeholder:text-white/20 font-medium"
-                required
-              />
-            </div>
-
-            {/* PIN & Submit */}
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-white/50 uppercase tracking-widest pl-1">Rejoindre un salon</label>
-              <div className="flex gap-3">
-                <input 
-                  type="text" 
-                  placeholder="CODE PIN" 
-                  value={roomId}
-                  onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-                  className="flex-1 bg-white/[0.03] border border-white/[0.08] text-white p-4 rounded-2xl focus:outline-none focus:border-pink-500/50 focus:bg-white/[0.05] transition-all placeholder:text-white/20 font-bold tracking-[0.2em] uppercase"
-                />
-                <button 
-                  type="submit" 
-                  disabled={!roomId || !username || isLoading}
-                  className="aspect-square h-full bg-pink-500 hover:bg-pink-400 disabled:opacity-50 disabled:hover:bg-pink-500 text-white rounded-2xl transition-all flex items-center justify-center group shadow-lg shadow-pink-500/25"
-                >
-                  {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />}
-                </button>
-              </div>
-            </div>
-          </form>
-
-          {/* Divider */}
-          <div className="my-8 flex items-center gap-4">
-            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent flex-1"></div>
-            <span className="text-white/30 text-[10px] font-bold uppercase tracking-widest">Ou</span>
-            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent flex-1"></div>
-          </div>
-
-          {/* Create Button */}
-          <button 
+        {/* Créer */}
+        <div className="border-t border-white/10 pt-8">
+          <h2 className="text-xl font-bold mb-2">Créer un salon</h2>
+          <button
             onClick={createRoom}
             disabled={isLoading}
-            className="w-full bg-white text-black p-4 rounded-2xl font-bold hover:bg-gray-200 transition-all active:scale-[0.98] disabled:opacity-70 disabled:hover:bg-white flex items-center justify-center gap-2"
+            className="w-full bg-white text-black font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-200 transition disabled:opacity-60"
           >
             {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-            {isLoading ? "Création du salon..." : "Créer un nouveau salon"}
+            {isLoading ? "Création…" : "Lancer un nouveau salon"}
           </button>
+        </div>
+
+        {/* Rejoindre */}
+        <div className="border-t border-white/10 pt-8">
+          <h2 className="text-xl font-bold mb-4">Rejoindre un salon</h2>
+          <form onSubmit={handleJoin} className="flex gap-2">
+            <div className="relative flex-1">
+              <Key className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-white/40" />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="Code à 6 chiffres"
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white font-bold tracking-widest focus:outline-none focus:border-blue-500 transition placeholder:text-white/30 placeholder:font-medium placeholder:tracking-normal"
+                maxLength={6}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!roomId || !username || isLoading}
+              className="bg-blue-600 text-white px-6 rounded-xl font-bold hover:bg-blue-700 disabled:opacity-40 transition flex items-center justify-center"
+            >
+              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
+            </button>
+          </form>
         </div>
       </motion.div>
 
-      {/* Mac App Download */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4, duration: 0.5 }}
-        className="mt-12 relative z-10"
+      {/* Lien app Mac */}
+      <a
+        href="https://github.com/osayanis/listen-party-saas"
+        target="_blank" rel="noopener noreferrer"
+        className="relative z-10 mt-10 flex items-center gap-3 bg-white/5 border border-white/10 px-6 py-3 rounded-full hover:bg-white/10 hover:border-white/20 transition group"
       >
-        <a 
-          href="https://github.com/osayanis/listen-party-saas" 
-          target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.08] px-6 py-3.5 rounded-full hover:bg-white/[0.08] hover:border-white/20 transition-all cursor-pointer group"
-        >
-          <div className="bg-white/10 p-1.5 rounded-full">
-            <Download className="w-4 h-4 text-white group-hover:-translate-y-0.5 transition-transform" />
-          </div>
-          <span className="text-white/70 group-hover:text-white font-medium text-sm">Télécharger pour Mac</span>
-        </a>
-      </motion.div>
-
+        <Download className="w-4 h-4 text-white/70 group-hover:-translate-y-0.5 transition-transform" />
+        <span className="text-white/70 group-hover:text-white font-medium text-sm">Télécharger pour Mac</span>
+      </a>
     </div>
   );
 }

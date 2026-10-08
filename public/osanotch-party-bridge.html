@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>OsaNotch Party Bridge</title></head>
+<body>
+<!-- Pont OsaParty pour le client natif OsaNotch : le notch joue le rôle du Mac bridge.
+     Piloté par le natif via window.osaParty.{join,setState,leave} ;
+     évènements renvoyés via window.webkit.messageHandlers.osaParty. -->
+<script src="/socket.io/socket.io.js"></script>
+<script>
+let socket, roomId;
+function post(m) { try { window.webkit.messageHandlers.osaParty.postMessage(m); } catch (e) {} }
+
+window.osaParty = {
+  // Crée ou rejoint un salon (même mécanisme côté serveur).
+  join: function (code) {
+    roomId = code;
+    if (socket) { try { socket.disconnect(); } catch (e) {} }
+    socket = io({ transports: ["websocket", "polling"] });
+
+    socket.on("connect", () => {
+      // "MacBridge" dans le nom → pas compté comme hôte, non rejeté si verrouillé.
+      socket.emit("join-room", roomId, "MacBridge-OsaNotch");
+      post({ type: "joined" });
+    });
+
+    socket.on("room-update", (data) => {
+      const users = (data && data.users) || [];
+      const humans = users.filter((u) => !(u.username || "").includes("MacBridge"));
+      post({ type: "members", count: humans.length });
+    });
+
+    // Ordres venus du web (play/pause/skip) → relayés au natif.
+    socket.on("web-action", (data) => { if (data && data.state) post({ type: "action", state: data.state }); });
+    socket.on("room-locked", () => post({ type: "error" }));
+    socket.on("connect_error", () => post({ type: "error" }));
+  },
+
+  // Diffuse l'état d'Apple Music lu par le notch.
+  setState: function (s) {
+    if (!socket || !roomId) return;
+    socket.emit("bridge-state", roomId, { state: s.state, track: s.track, artist: s.artist, queue: [] });
+  },
+
+  leave: function () { try { socket && socket.disconnect(); } catch (e) {} socket = null; roomId = null; }
+};
+
+post({ type: "ready" });
+</script>
+</body>
+</html>
