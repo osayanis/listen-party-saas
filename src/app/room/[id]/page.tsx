@@ -70,6 +70,15 @@ export default function Room() {
   const [confetti, setConfetti] = useState(false);
   const [dims, setDims] = useState({ w: 0, h: 0 });
   const [greet, setGreet] = useState(true);
+  // La mascotte réagit à ce qui se passe dans le salon (quelques secondes).
+  const [buzz, setBuzz] = useState<{ mood: "excited" | "cheer" | "happy" | "love"; say?: string } | null>(null);
+  const buzzTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const react2 = useCallback((b: { mood: "excited" | "cheer" | "happy" | "love"; say?: string }, ms = 2600) => {
+    setBuzz(b);
+    if (buzzTimer.current) clearTimeout(buzzTimer.current);
+    buzzTimer.current = setTimeout(() => setBuzz(null), ms);
+  }, []);
+  const firstTrack = useRef(true);
   const [joinUrl, setJoinUrl] = useState("");
 
   const users = allUsers.filter((u) => !isBridge(u.username));
@@ -106,7 +115,13 @@ export default function Room() {
   const applyTrack = useCallback((t: TrackInfo, ageMs: number) => {
     const key = `${t.track}::${t.artist}`;
     const changed = key !== trackKey.current;
-    if (changed) { trackKey.current = key; loadMeta(t); setVoted(false); }
+    if (changed) {
+      trackKey.current = key; loadMeta(t); setVoted(false);
+      if (hasTrack(t)) {
+        if (!firstTrack.current) react2({ mood: "excited", say: ["Oh, j'adore celui-là !", "Bon choix 👌", "Ça c'est un son !", "On monte le son ?"][Math.floor(Math.random() * 4)] });
+        firstTrack.current = false;
+      }
+    }
     setTrack(t);
     const playing = t.state === "playing";
     if (typeof t.position === "number") {
@@ -114,7 +129,7 @@ export default function Room() {
     } else {
       setPlayback((p) => ({ pos: changed ? 0 : live(p), at: performance.now(), playing }));
     }
-  }, [loadMeta]);
+  }, [loadMeta, react2]);
 
   // ── Connexion temps réel ────────────────────────────────────────────────
   useEffect(() => {
@@ -148,6 +163,7 @@ export default function Room() {
       setMessages((prev) => [...prev.slice(-199), m]);
       if (m.system) {
         if (m.kind && m.kind !== "win") notify(m.text, NOTICE_ICONS[m.kind], m.kind === "leave" ? "bad" : m.kind === "game" ? "game" : "info");
+        if (m.kind === "join" && !m.text.startsWith(username + " ")) react2({ mood: "happy", say: `Salut ${m.text.replace(/ a rejoint la soirée$/, "")} 👋` });
         if (m.kind === "win") notify(m.text, "🎯", "game");
       } else if (m.username !== username && tabRef.current !== "chat") {
         setUnread((u) => u + 1);
@@ -160,6 +176,7 @@ export default function Room() {
       const y = rect ? rect.top : window.innerHeight - 160;
       setFloating((f) => [...f.slice(-24), { id: r.id, emoji: r.emoji, username: r.username || "", x, y, drift: Math.random() * 120 - 60 }]);
       setTimeout(() => setFloating((f) => f.filter((x) => x.id !== r.id)), 3200);
+      react2({ mood: r.emoji === "😍" ? "love" : "excited" }, 1400);
     });
 
     s.on("blind-test-update", (on: boolean) => { setIsBlindTest(on); setSolvers([]); setTab(on ? "guess" : "lyrics"); });
@@ -167,6 +184,7 @@ export default function Room() {
     s.on("blind-test-winner", (d: any) => {
       setSolvers(d.solvers || []);
       if (d.username === username || d.rank === 0) { setConfetti(true); setTimeout(() => setConfetti(false), 4500); }
+      react2({ mood: "cheer", say: d.username === username ? "Bien joué toi ! 🎉" : `Bravo ${d.username} !` }, 3200);
     });
     s.on("blind-test-wrong", () => { setShake((n) => n + 1); notify("Raté ! Ce n'est pas ça 🙈", "✖", "bad"); });
     s.on("blind-test-already", () => notify("Tu as déjà trouvé ce morceau", "✔", "good"));
@@ -175,7 +193,7 @@ export default function Room() {
     s.on("kicked", () => setFatal({ title: "Tu as été expulsé", text: "L'hôte t'a retiré du salon." }));
 
     return () => { s.disconnect(); sock.current = null; };
-  }, [roomId, username, applyTrack, notify]);
+  }, [roomId, username, applyTrack, notify, react2]);
 
   // Horloge locale : la position avance entre deux mises à jour du Mac.
   useEffect(() => {
@@ -332,8 +350,9 @@ export default function Room() {
               transition={playback.playing ? { duration: 3.2, repeat: Infinity, ease: "easeInOut" } : { duration: 0.6 }} />
 
             {/* la mascotte perchée sur la pochette */}
-            <div className="absolute -top-[50px] right-7 z-20">
-              <Mascot size={60} mood={greet ? "happy" : mascotMood} wave={greet} glow={acc(0.4)} />
+            <div className="absolute -top-[66px] right-5 z-20">
+              <Mascot size={84} mood={greet ? "happy" : buzz ? buzz.mood : mascotMood} wave={greet} glow={acc(0.4)}
+                say={greet ? `Salut ${username} !` : buzz?.say || null} holding={playback.playing && !hiddenTrack && !buzz ? "note" : null} />
             </div>
 
             <motion.div className="relative w-full h-full" animate={{ scale: playback.playing || !showTrack || hiddenTrack ? 1 : 0.92 }} transition={{ type: "spring", stiffness: 220, damping: 22 }}>
