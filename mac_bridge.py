@@ -1,3 +1,4 @@
+import os
 import time
 import subprocess
 import socketio
@@ -13,14 +14,27 @@ def run_applescript(script):
     except Exception:
         return None
 
+def to_float(s):
+    try:
+        return float(str(s).replace(',', '.'))
+    except ValueError:
+        return 0.0
+
+def without_position(state):
+    return {k: v for k, v in state.items() if k != "position"} if state else state
+
 def get_music_state():
     script = """
     tell application "Music"
         if it is running then
             set pState to player state as string
+            set pPos to "0"
+            set tDur to "0"
             try
                 set tName to name of current track
                 set tArtist to artist of current track
+                set pPos to (player position as string)
+                set tDur to (duration of current track as string)
             on error
                 set tName to "Unknown"
                 set tArtist to "Unknown"
@@ -42,23 +56,26 @@ def get_music_state():
                 set upcoming to "NO_QUEUE"
             end try
             
-            return pState & "|" & tName & "|" & tArtist & "|" & upcoming
+            return pState & "|" & tName & "|" & tArtist & "|" & pPos & "|" & tDur & "|" & upcoming
         end if
-        return "stopped|Aucune musique|Aucun|NO_QUEUE"
+        return "stopped|Aucune musique|Aucun|0|0|NO_QUEUE"
     end tell
     """
     res = run_applescript(script)
     if res:
-        parts = res.split('|', 3)
-        if len(parts) >= 3:
+        parts = res.split('|', 5)
+        if len(parts) >= 5:
             state_data = {
                 "state": parts[0],
                 "track": parts[1],
                 "artist": parts[2],
+                # AppleScript renvoie "123,45" en locale française → on remplace la virgule.
+                "position": round(to_float(parts[3])),
+                "duration": round(to_float(parts[4])),
                 "queue": []
             }
-            if len(parts) == 4 and parts[3] not in ["NO_QUEUE", ""]:
-                items = [x for x in parts[3].split('||') if x]
+            if len(parts) == 6 and parts[5] not in ["NO_QUEUE", ""]:
+                items = [x for x in parts[5].split('||') if x]
                 for idx, item in enumerate(items):
                     sub = item.split('::')
                     if len(sub) == 2:
@@ -97,7 +114,7 @@ def main():
     print("========================================")
     ROOM_ID = input("Entrez le code PIN du salon (affiché sur le site web) : ").strip()
     
-    SERVER_URL = 'http://localhost:3000'
+    SERVER_URL = os.environ.get('OSAPARTY_URL', 'https://osaparty.osalabs.fr')
     print(f"Connexion au serveur web ({SERVER_URL})...")
     
     try:
@@ -106,19 +123,24 @@ def main():
         print(f"Erreur de connexion ({e})")
         return
         
+    last_sent_at = 0
     try:
         while True:
             time.sleep(1.5)
             current_state = get_music_state()
-            
+
             if IGNORE_NEXT:
                 LAST_STATE = current_state
                 IGNORE_NEXT = False
                 continue
-                
-            if current_state != LAST_STATE:
+
+            # On renvoie l'état quand il change (hors position), et toutes les 10 s
+            # pour recaler la position côté web.
+            changed = without_position(current_state) != without_position(LAST_STATE)
+            if changed or time.time() - last_sent_at > 10:
                 if current_state['state'] != 'stopped':
                     sio.emit('bridge-state', (ROOM_ID, current_state))
+                    last_sent_at = time.time()
                 LAST_STATE = current_state
                 
     except KeyboardInterrupt:

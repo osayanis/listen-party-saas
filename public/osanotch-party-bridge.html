@@ -31,6 +31,8 @@ window.osaParty = {
 
     // Ordres venus du web (play/pause/skip) → relayés au natif.
     socket.on("web-action", (data) => { if (data && data.state) post({ type: "action", state: data.state }); });
+    // État diffusé dans le salon (utile au notch quand il n'est qu'invité).
+    socket.on("bridge-state", (data) => post({ type: "remote-state", payload: data }));
     socket.on("room-locked", () => post({ type: "error" }));
     socket.on("connect_error", () => post({ type: "error" }));
   },
@@ -38,7 +40,11 @@ window.osaParty = {
   // Diffuse l'état d'Apple Music lu par le notch.
   setState: function (s) {
     if (!socket || !roomId) return;
-    socket.emit("bridge-state", roomId, { state: s.state, track: s.track, artist: s.artist, queue: [] });
+    const st = { state: s.state, track: s.track, artist: s.artist, queue: [] };
+    // Position/durée (secondes) : permettent au web d'afficher la progression et de caler les paroles.
+    if (typeof s.position === "number") st.position = s.position;
+    if (typeof s.duration === "number" && s.duration > 0) st.duration = s.duration;
+    socket.emit("bridge-state", roomId, st);
   },
 
   leave: function () { try { socket && socket.disconnect(); } catch (e) {} socket = null; roomId = null; }
